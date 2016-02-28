@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Project xsi:noNamespaceSchemaLocation="Project.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<Version current="1"/>
+	<Format>Project</Format>
+	<Header>
+		<Program name="TopoR" version="6.2"/>
+		<GUID>{A79D8C87-03C9-4181-B1E0-C3EA3F2A065F}</GUID>
+		<Annotation>Project file</Annotation>
+	</Header>
+	<Document>
+		<LocalLibrary />
+		<Pcb>
+			<File path=".\TrafficLight.fsx" isopened="1"/>
+		</Pcb>
+		<Import>
+			<Specctra>
+			<Path name="D:\Nute\PresentTime\TrafficLight\TrafficLight_hw\TrafficLight.dsn"/>
+			</Specctra>
+		</Import>
+		<ARouteSessions>
+		</ARouteSessions>
+	</Document>
+</Project>
