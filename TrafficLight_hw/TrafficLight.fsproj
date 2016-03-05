@@ -10,7 +10,7 @@
 	<Document>
 		<LocalLibrary />
 		<Pcb>
-			<File path=".\TrafficLight.fsx" isopened="1"/>
+			<File path=".\TrafficLight.fsx" isopened="0"/>
 		</Pcb>
 		<Import>
 			<Specctra>
