@@ -5,15 +5,14 @@
  *      Author: kreyl
  */
 
-#ifndef KL_BUF_H_
-#define KL_BUF_H_
+#pragma once
 
 #include "ch.h"
 #include "string.h" // for memcpy
-#include <kl_lib.h>
+#include "kl_lib.h"
 
 // Lib version
-#define KL_BUF_VERSION      "20151102_1339"
+#define KL_BUF_VERSION      "20160306_0201"
 
 enum AddRslt_t {addrOk, addrFail, addrSwitch};
 
@@ -30,6 +29,7 @@ protected:
     uint32_t IFullSlotsCount=0;
     T IBuf[Sz], *PRead=IBuf, *PWrite=IBuf;
 public:
+    // Copies object
     uint8_t Get(T *p) {
         if(IFullSlotsCount == 0) return EMPTY;
         memcpy(p, PRead, sizeof(T));
@@ -37,6 +37,7 @@ public:
         IFullSlotsCount--;
         return OK;
     }
+    // Outputs pointer to object in buffer
     uint8_t GetPAndMove(T **pp) {
     	if(IFullSlotsCount == 0) return EMPTY;
     	*pp = PRead;
@@ -44,21 +45,24 @@ public:
         IFullSlotsCount--;
         return OK;
     }
+    // Outputs pointer to last object in buffer
     uint8_t GetLastP(T **pp) {
     	if(IFullSlotsCount == 0) return EMPTY;
 		*pp = PRead;
 		return OK;
     }
 
-    uint8_t PutAnyway(T *p) {
+    void PutAnyway(T *p) {
 		memcpy(PWrite, p, sizeof(T));
 		if(++PWrite > (IBuf + Sz - 1)) PWrite = IBuf;   // Circulate buffer
 		if(IFullSlotsCount < Sz) IFullSlotsCount++;
-		return OK;
 	}
     uint8_t Put(T *p) {
         if(IFullSlotsCount >= Sz) return OVERFLOW;
-        return PutAnyway(p);
+        else {
+            PutAnyway(p);
+            return OK;
+        }
     }
 
     inline bool IsEmpty() { return (IFullSlotsCount == 0); }
@@ -297,4 +301,3 @@ public:
     }
 };
 */
-#endif /* KL_BUF_H_ */

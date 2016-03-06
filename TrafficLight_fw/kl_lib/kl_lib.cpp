@@ -14,8 +14,6 @@
 #if 1 // ============================= Timer ===================================
 void Timer_t::Init() {
 #if defined STM32L1XX
-    if(ANY_OF_3(ITmr, TIM9, TIM10, TIM11)) PClk = &Clk.APB2FreqHz;
-    else PClk = &Clk.APB1FreqHz;
     if     (ITmr == TIM2)  { rccEnableTIM2(FALSE); }
     else if(ITmr == TIM3)  { rccEnableTIM3(FALSE); }
     else if(ITmr == TIM4)  { rccEnableTIM4(FALSE); }
@@ -86,6 +84,13 @@ void Timer_t::Deinit() {
 #endif
 }
 
+void Timer_t::SetupPrescaler(uint32_t PrescaledFreqHz) {
+    uint32_t Freq;
+    if(ANY_OF_3(ITmr, TIM9, TIM10, TIM11)) Freq = Clk.APB2FreqHz * Clk.Timer9_11ClkMulti;
+    else Freq = Clk.APB1FreqHz * Clk.Timer2_7ClkMulti;
+    ITmr->PSC = (Freq / PrescaledFreqHz) - 1;
+}
+
 void Timer_t::InitPwm(GPIO_TypeDef *GPIO, uint16_t N, uint8_t Chnl, uint32_t ATopValue, Inverted_t Inverted, PinOutMode_t OutputType) {
     // GPIO
 #if defined STM32L1XX
@@ -152,10 +157,10 @@ void Timer_t::SetUpdateFrequency(uint32_t FreqHz) {
     else // APB1 is clock src
     	SetTopValue((*PClk * Clk.TimerAPB1ClkMulti) / FreqHz);
 #elif defined STM32L1XX
-    uint32_t TopVal;
-    if(ANY_OF_3(ITmr, TIM9, TIM10, TIM11)) // APB2 is clock src
-        TopVal  = ((*PClk * Clk.Timer9_11ClkMulti) / FreqHz) - 1;
-    else TopVal = ((*PClk * Clk.Timer2_7ClkMulti) / FreqHz) - 1;
+    uint32_t Freq;
+    if(ANY_OF_3(ITmr, TIM9, TIM10, TIM11)) Freq = Clk.APB2FreqHz * Clk.Timer9_11ClkMulti;
+    else Freq = Clk.APB1FreqHz * Clk.Timer2_7ClkMulti;
+    uint32_t TopVal  = (Freq / FreqHz) - 1;
 //    Uart.Printf("Topval = %u\r", TopVal);
     SetTopValue(TopVal);
 #else

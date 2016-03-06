@@ -1439,7 +1439,7 @@ Wire Wire Line
 Wire Wire Line
 	2950 3300 3050 3300
 Text Notes 900  1850 0    60   ~ 0
-Periphery\n\nT3 C2: LED Straight\nT4 C1,2,3,4: LEDs\nT9C1: IR_In\nT11 C1: Buzzer\nSPI1: CC\nUART1: Debug UART\nDAC1: IR Out
+Periphery\n\nT3 C2: LED Straight\nT4 C1,2,3,4: LEDs\nT6: IR DAC sampling\nT7: IR DAC Carrier\nT9C1: IR_In\nT11 C1: Buzzer\nSPI1: CC\nUART1: Debug UART\nDAC1: IR Out
 $Comp
 L L L1
 U 1 1 56D26805

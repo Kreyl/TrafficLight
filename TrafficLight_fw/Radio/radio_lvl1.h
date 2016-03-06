@@ -5,8 +5,7 @@
  *      Author: kreyl
  */
 
-#ifndef RADIO_LVL1_H_
-#define RADIO_LVL1_H_
+#pragma once
 
 #include <kl_lib.h>
 #include "ch.h"
@@ -30,5 +29,3 @@ public:
 };
 
 extern rLevel1_t Radio;
-
-#endif /* RADIO_LVL1_H_ */

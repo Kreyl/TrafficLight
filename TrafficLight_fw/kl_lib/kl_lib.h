@@ -330,11 +330,10 @@ enum ExtTrigPsc_t {etpOff=0x0000, etpDiv2=0x1000, etpDiv4=0x2000, etpDiv8=0x3000
 class Timer_t {
 protected:
     TIM_TypeDef* ITmr;
-    uint32_t *PClk;
 public:
     // Common
-    Timer_t(TIM_TypeDef *APTimer) : ITmr(APTimer), PClk(nullptr) {}
-    Timer_t() : ITmr(nullptr), PClk(nullptr) {}
+    Timer_t(TIM_TypeDef *APTimer) : ITmr(APTimer) {}
+    Timer_t() : ITmr(nullptr) {}
     void Init();
     void Deinit();
     void Enable()  { TMR_ENABLE(ITmr); }
@@ -342,7 +341,7 @@ public:
     void SetUpdateFrequency(uint32_t FreqHz);
     void SetTopValue(uint32_t Value) { ITmr->ARR = Value; }
     uint32_t GetTopValue() { return ITmr->ARR; }
-    void SetupPrescaler(uint32_t PrescaledFreqHz) { ITmr->PSC = (*PClk / PrescaledFreqHz) - 1; }
+    void SetupPrescaler(uint32_t PrescaledFreqHz);
     void SetCounter(uint32_t Value) { ITmr->CNT = Value; }
     uint32_t GetCounter() { return ITmr->CNT; }
     // Master/Slave

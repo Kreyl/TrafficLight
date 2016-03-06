@@ -12,5 +12,7 @@
 
 #define EVT_RADIO_NEW_CMD   EVENT_MASK(2)
 
+#define EVT_TIME_TO_IRTX    EVENT_MASK(3)
+
 #define EVT_SAMPLING        EVENT_MASK(4)
 #define EVT_ADC_DONE        EVENT_MASK(5)

@@ -11,8 +11,11 @@
 #include "Sequences.h"
 #include "radio_lvl1.h"
 #include "Sequences.h"
+#include "ir.h"
 
 App_t App;
+ir_t ir;
+TmrKL_t TmrIrTx;
 
 LedSmooth_t LedRed(LED_RED);
 LedSmooth_t LedYellow(LED_YELLOW);
@@ -42,6 +45,9 @@ int main(void) {
     LedStraight.Init();
     LedLeft.Init();
     LedRight.Init();
+
+    ir.Init();
+    TmrIrTx.InitAndStart(chThdGetSelfX(), MS2ST(IR_TX_PERIOD_MS), EVT_TIME_TO_IRTX, tktPeriodic);
 
     if(Rslt != OK) {
         LedRed.StartSequence(lsqFailure);
@@ -79,6 +85,28 @@ void App_t::ITask() {
         }
 #endif
 
+#if 1 // ==== Radio cmd ====
+        if(Evt & EVT_RADIO_NEW_CMD) {
+            CmdQ.Get(&State);
+            LedRed.SetBrightness(State.Brightness[0]);
+            LedYellow.SetBrightness(State.Brightness[1]);
+            LedStraight.SetBrightness(State.Brightness[2]);
+            LedLeft.SetBrightness(State.Brightness[3]);
+            LedRight.SetBrightness(State.Brightness[4]);
+        }
+#endif
+
+#if 1 // ==== IR TX ====
+        if(Evt & EVT_TIME_TO_IRTX) {
+            if(State.IRPwr != 0) {
+                uint16_t Data = State.IRData;
+                Data <<= 8;
+                uint16_t Pwr = State.IRPwr;
+                Pwr = Pwr * 10 + 1000;
+                ir.TransmitWord(Data, Pwr);
+            }
+        }
+#endif
     } // while true
 }
 

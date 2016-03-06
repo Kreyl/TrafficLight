@@ -42,9 +42,17 @@
 #define LED_STRAIGHT    { GPIOB, 5, TIM3, 2 }
 #define LED_LEFT        { GPIOB, 7, TIM4, 2 }
 #define LED_RIGHT       { GPIOB, 6, TIM4, 1 }
+
+// IR LED
+#define LED_IR          { GPIOA, 4 }
 #endif // GPIO
 
 #if 1 // ========================= Timer =======================================
+#define TMR_DAC_CHUNK               TIM6
+#define TMR_DAC_SMPL                TIM7
+#define TMR_DAC_CHUNK_IRQ           TIM6_IRQn
+#define TMR_DAC_CHUNK_IRQ_HANDLER   VectorEC
+
 #endif // Timer
 
 #if I2C_REQUIRED // ====================== I2C =================================
@@ -87,6 +95,9 @@
 #define UART_DMA_TX     STM32_DMA1_STREAM4
 #define UART_DMA_RX     STM32_DMA1_STREAM5
 #define UART_DMA_CHNL   0   // Dummy
+
+// DAC
+#define DAC_DMA         STM32_DMA1_STREAM2
 
 #if I2C_REQUIRED // ==== I2C ====
 #define I2C_ACC_DMA_TX  STM32_DMA1_STREAM4
