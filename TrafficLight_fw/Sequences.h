@@ -5,8 +5,7 @@
  *      Author: Kreyl
  */
 
-#ifndef SEQUENCES_H_
-#define SEQUENCES_H_
+#pragma once
 
 #include "ChunkTypes.h"
 
@@ -189,7 +188,7 @@ const LedChunk_t lsqBlinkGreenX2[] = {
 };
 #endif
 
-#if 1 // ============================ LED RGB ==================================
+#if 0 // ============================ LED RGB ==================================
 const LedRGBChunk_t lsqFailure[] = {
         {csSetup, 0, clRed},
         {csWait, 99},
@@ -219,25 +218,35 @@ const LedRGBChunk_t lsqOff[] = {
 
 #endif
 
-#if 0 // =========================== LED Smooth ================================
-#define LED_TOP_BRIGHTNESS  255
+#if 1 // =========================== LED Smooth ================================
+#define LED_TOP_BRIGHTNESS  100
 
-const LedSmoothChunk_t lsqFadeIn[] = {
-        {csSetup, 630, LED_TOP_BRIGHTNESS},
+const LedSmoothChunk_t lsqFailure[] = {
+        {csSetup, 0, LED_TOP_BRIGHTNESS},
+        {csWait,  135},
+        {csSetup, 0, 0},
+        {csWait,  135},
+        {csSetup, 0, LED_TOP_BRIGHTNESS},
+        {csWait,  135},
+        {csSetup, 0, 0},
+        {csWait,  135},
+        {csSetup, 0, LED_TOP_BRIGHTNESS},
+        {csWait,  135},
+        {csSetup, 0, 0},
+        {csWait,  450},
+        {csGoto, 0}
+};
+
+const LedSmoothChunk_t lsqStart[] = {
+        {csSetup, 180, LED_TOP_BRIGHTNESS},
+        {csSetup, 180, 0},
         {csEnd}
 };
 const LedSmoothChunk_t lsqFadeOut[] = {
         {csSetup, 630, 0},
         {csEnd}
 };
-const LedSmoothChunk_t lsqEnterActive[] = {
-        {csSetup, 0, LED_TOP_BRIGHTNESS},
-        {csEnd}
-};
-const LedSmoothChunk_t lsqEnterIdle[] = {
-        {csSetup, 360, 0},
-        {csEnd}
-};
+
 
 #endif
 
@@ -263,7 +272,7 @@ const BeepChunk_t bsqBeepBeep[] = {
 };
 #endif
 
-#if 1 // ============================== Vibro ==================================
+#if 0 // ============================== Vibro ==================================
 #define VIBRO_VOLUME    27  // 1 to 22
 
 #define VIBRO_SHORT_MS          99
@@ -326,5 +335,3 @@ const BaseChunk_t vsqMany[] = {
         {csGoto, 0}
 };
 #endif
-
-#endif /* SEQUENCES_H_ */

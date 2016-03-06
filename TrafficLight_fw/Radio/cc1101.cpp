@@ -25,13 +25,13 @@ uint8_t cc1101_t::Init() {
 //    PinSetupIn       (CC_GPIO, CC_GDO2, pudNone);
     PinSetupAnalog   (CC_GPIO, CC_GDO2);    // GDO2 not used
     CsHi();
-    // ==== SPI ====    MSB first, master, ClkLowIdle, FirstEdge, Baudrate=f/2
-    ISpi.Setup(CC_SPI, boMSB, cpolIdleLow, cphaFirstEdge, sbFdiv2);
+    // ==== SPI ==== 6.5MHz max! MSB first, master, ClkLowIdle, FirstEdge, Baudrate=f/2
+    ISpi.Setup(CC_SPI, boMSB, cpolIdleLow, cphaFirstEdge, sbFdiv4);
     ISpi.Enable();
     // ==== Init CC ====
     if(Reset() != OK) {
         ISpi.Disable();
-        Uart.Printf("\rCC Rst Fail");
+        Uart.Printf("CC Rst Fail\r");
         return FAILURE;
     }
     // Check if success
@@ -39,7 +39,7 @@ uint8_t cc1101_t::Init() {
     uint8_t Rpl = ReadRegister(CC_PKTLEN);
     if(Rpl != 7) {
         ISpi.Disable();
-        Uart.Printf("\rCC R/W Fail; rpl=%u", Rpl);
+        Uart.Printf("CC R/W Fail; rpl=%u\r", Rpl);
         return FAILURE;
     }
     // Proceed with init

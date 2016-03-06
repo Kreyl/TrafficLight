@@ -40,17 +40,11 @@ static void rLvl1Thread(void *arg) {
 
 __noreturn
 void rLevel1_t::ITask() {
-    __unused uint8_t OldID = 0;
     while(true) {
-        __unused eventmask_t Evt = chEvtWaitAny(ALL_EVENTS);
-        if(Evt & EVT_NEW_9D) {
-            Pkt.Time = chVTGetSystemTime();
+        int8_t Rssi;
+        if(CC.ReceiveSync(360, &Pkt, &Rssi) == OK) {
+            Uart.Printf("\rRssi=%d; ID=%u", Rssi, Pkt.ID);
 
-
-
-            DBG1_SET();
-            CC.TransmitSync(&Pkt);
-            DBG1_CLR();
         }
 
 #if 0        // Demo
@@ -128,7 +122,7 @@ uint8_t rLevel1_t::Init() {
     if(CC.Init() == OK) {
         CC.SetTxPower(CC_Pwr0dBm);
         CC.SetPktSize(RPKT_LEN);
-
+        CC.SetChannel(RCHNL_MIN);
         // Thread
         PThd = chThdCreateStatic(warLvl1Thread, sizeof(warLvl1Thread), HIGHPRIO, (tfunc_t)rLvl1Thread, NULL);
         return OK;

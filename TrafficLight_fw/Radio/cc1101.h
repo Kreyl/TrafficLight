@@ -17,7 +17,7 @@
 #include "cc1101_rf_settings.h"
 #include "cc_gpio.h"
 
-#define CC_BUSYWAIT_TIMEOUT     99000   // tics, not ms
+#define CC_BUSYWAIT_TIMEOUT     990000   // tics, not ms
 
 class cc1101_t {
 private:

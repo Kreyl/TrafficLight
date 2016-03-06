@@ -606,19 +606,20 @@ uint8_t TryStrToFloat(char* S, float *POutput) {
 #if 1 // ============================== Clocking ===============================
 Clk_t Clk;
 
-#define CLK_STARTUP_TIMEOUT     200007
+#define CLK_STARTUP_TIMEOUT     9999
 
 #if defined STM32L1XX
 // ==== Inner use ====
 uint8_t Clk_t::EnableHSE() {
     RCC->CR |= RCC_CR_HSEON;    // Enable HSE
-    // Wait until ready
+    // Wait until ready, 1ms typical according to datasheet
     uint32_t StartUpCounter=0;
     do {
-        if(RCC->CR & RCC_CR_HSERDY) return 0;   // HSE is ready
+        if(RCC->CR & RCC_CR_HSERDY) return OK;   // HSE is ready
         StartUpCounter++;
     } while(StartUpCounter < CLK_STARTUP_TIMEOUT);
-    return 1; // Timeout
+    RCC->CR &= ~RCC_CR_HSEON;   // Disable HSE
+    return TIMEOUT;
 }
 
 uint8_t Clk_t::EnableHSI() {
@@ -731,13 +732,18 @@ uint8_t Clk_t::SwitchToHSI() {
 
 // Enables HSE, switches to HSE
 uint8_t Clk_t::SwitchToHSE() {
-    if(EnableHSE() != 0) return 1;
-    uint32_t tmp = RCC->CFGR;
-    tmp &= ~RCC_CFGR_SW;
-    tmp |=  RCC_CFGR_SW_HSE;  // Select HSE as system clock src
-    RCC->CFGR = tmp;
-    while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSE); // Wait till ready
-    return 0;
+    // Try to enable HSE several times
+    for(uint32_t i=0; i<11; i++) {
+        if(EnableHSE() == OK) {
+            uint32_t tmp = RCC->CFGR;
+            tmp &= ~RCC_CFGR_SW;
+            tmp |=  RCC_CFGR_SW_HSE;  // Select HSE as system clock src
+            RCC->CFGR = tmp;
+            while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSE); // Wait till ready
+            return OK;
+        }
+    } // for
+    return FAILURE;
 }
 
 // Enables HSE, enables PLL, switches to PLL
@@ -807,7 +813,7 @@ void Clk_t::PrintFreqs() {
             Timer2_7ClkMulti, Timer9_11ClkMulti);
 }
 
-// =============================== V Core ======================================
+// ==== V Core ====
 void SetupVCore(VCore_t AVCore) {
     // PWR clock enable
     RCC->APB1ENR = RCC_APB1ENR_PWREN;
