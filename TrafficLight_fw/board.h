@@ -28,6 +28,14 @@
 #define UART_RX_PIN     10
 #define UART_AF         AF7 // for USART1 @ GPIOA
 
+// Dip Switch
+#define DIPSW_PIN1      { GPIOA, 15 }
+#define DIPSW_PIN2      { GPIOC, 13 }
+#define DIPSW_PIN3      { GPIOC, 14 }
+#define DIPSW_PIN4      { GPIOA, 12 }
+#define DIPSW_PIN5      { GPIOA, 11 }
+#define DIPSW_PIN6      { GPIOA, 8 }
+
 // LEDs GPIO and timer
 #define LED_RED         { GPIOB, 9, TIM4, 4 }
 #define LED_YELLOW      { GPIOB, 8, TIM4, 3 }

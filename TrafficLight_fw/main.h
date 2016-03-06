@@ -19,6 +19,8 @@ class App_t {
 private:
     thread_t *PThread;
 public:
+    uint8_t ID;
+    uint8_t GetDipSwitch();
     // Eternal methods
     void InitThread() { PThread = chThdGetSelfX(); }
     void SignalEvt(eventmask_t Evt) {

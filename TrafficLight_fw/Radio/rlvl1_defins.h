@@ -5,8 +5,7 @@
  *      Author: kreyl
  */
 
-#ifndef RLVL1_DEFINS_H_
-#define RLVL1_DEFINS_H_
+#pragma once
 
 #if 0 // ========================= Signal levels ===============================
 // pyton translation for db
@@ -51,35 +50,29 @@ static inline void Lvl250ToLvl1000(uint16_t *PLvl) {
 
 #if 1 // =========================== Pkt_t =====================================
 struct rPkt_t {
-    uint16_t Time;
-    int16_t AccData[9];
+    uint8_t ID;
+    uint8_t Brightness[5];
+    uint8_t IRPwr, IRData;
 } __attribute__ ((__packed__));
 #define RPKT_LEN    sizeof(rPkt_t)
 #endif
 
-// ==== Sizes ====
-#define RXTABLE_SZ      54
-#define RXTABLE_MAX_CNT 3   // Do not receive if this count reached. Will not indicate more anyway.
-
 #if 1 // ======================= Channels & cycles =============================
-#define RCHNL_MIN       5
+#define RCHNL_MIN       4
 #define ID2RCHNL(ID)    (RCHNL_MIN + ID)
 
-#define RCHNL_RXTX      4
-#define CYCLE_CNT       4
-#define SLOT_CNT        72
+#define RCHNL_DEFAULT   4
 
+#define RETRY_CNT       4
 #endif
 
 #if 1 // =========================== Timings ===================================
-#define TX_DURATION_MS          1800
-#define RX_T_MS                 7
-#define RX_SLEEP_T_MS           810
+//#define TX_DURATION_MS          1800
+#define RX_T_MS                 27
 
-#define SLOT_DURATION_MS        3
 #define MIN_SLEEP_DURATION_MS   18
 
+#define RETRY_T_MIN_MS          4
+#define RETRY_T_MAX_MS          27
+
 #endif
-
-
-#endif /* RLVL1_DEFINS_H_ */
