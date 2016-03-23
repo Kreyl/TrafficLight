@@ -35,8 +35,6 @@ void Timer_t::Init() {
 #endif
     else if(ITmr == TIM16) { RCC->APB2ENR |= RCC_APB2ENR_TIM16EN; }
     else if(ITmr == TIM17) { RCC->APB2ENR |= RCC_APB2ENR_TIM17EN; }
-    // Clock src
-    PClk = &Clk.APBFreqHz;
 #elif defined STM32F2XX || defined STM32F4XX
     if(ANY_OF_5(ITmr, TIM1, TIM8, TIM9, TIM10, TIM11)) PClk = &Clk.APB2FreqHz;
     else PClk = &Clk.APB1FreqHz;
@@ -86,8 +84,15 @@ void Timer_t::Deinit() {
 
 void Timer_t::SetupPrescaler(uint32_t PrescaledFreqHz) {
     uint32_t Freq;
+#if defined STM32L1XX
     if(ANY_OF_3(ITmr, TIM9, TIM10, TIM11)) Freq = Clk.APB2FreqHz * Clk.Timer9_11ClkMulti;
     else Freq = Clk.APB1FreqHz * Clk.Timer2_7ClkMulti;
+#elif defined STM32F0XX
+    Freq = Clk.APBFreqHz * Clk.TimerClkMulti;
+#else
+#error "Timer Clk setup error"
+#endif
+
     ITmr->PSC = (Freq / PrescaledFreqHz) - 1;
 }
 
