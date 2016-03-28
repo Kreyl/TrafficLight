@@ -221,7 +221,7 @@ const LedRGBChunk_t lsqOff[] = {
 #if 1 // =========================== LED Smooth ================================
 #define LED_TOP_BRIGHTNESS  100
 
-const LedSmoothChunk_t lsqFailure[] = {
+const LedSmoothChunk_t lsqFailureClk[] = {
         {csSetup, 0, LED_TOP_BRIGHTNESS},
         {csWait,  135},
         {csSetup, 0, 0},
@@ -234,6 +234,14 @@ const LedSmoothChunk_t lsqFailure[] = {
         {csWait,  135},
         {csSetup, 0, 0},
         {csWait,  450},
+        {csGoto, 0}
+};
+
+const LedSmoothChunk_t lsqFailureCC[] = {
+        {csSetup, 0, LED_TOP_BRIGHTNESS},
+        {csWait,  135},
+        {csSetup, 0, 0},
+        {csWait,  810},
         {csGoto, 0}
 };
 

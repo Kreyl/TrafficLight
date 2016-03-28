@@ -29,19 +29,30 @@ uint8_t cc1101_t::Init() {
     ISpi.Setup(CC_SPI, boMSB, cpolIdleLow, cphaFirstEdge, sbFdiv4);
     ISpi.Enable();
     // ==== Init CC ====
-    if(Reset() != OK) {
+    bool InitOk = false;
+    for(int i=0; i<9; i++) {
+        if(Reset() != OK) {
+            Uart.Printf("CC Rst Fail\r");
+            chThdSleepMilliseconds(99);
+            continue;
+        }
+        // Check if success
+        WriteRegister(CC_PKTLEN, 7);
+        uint8_t Rpl = ReadRegister(CC_PKTLEN);
+        if(Rpl == 7) {
+            InitOk = true;
+            break;
+        }
+        else {
+            Uart.Printf("CC R/W Fail; rpl=%u\r", Rpl);
+            chThdSleepMilliseconds(99);
+        }
+    }
+    if(!InitOk) {
         ISpi.Disable();
-        Uart.Printf("CC Rst Fail\r");
         return FAILURE;
     }
-    // Check if success
-    WriteRegister(CC_PKTLEN, 7);
-    uint8_t Rpl = ReadRegister(CC_PKTLEN);
-    if(Rpl != 7) {
-        ISpi.Disable();
-        Uart.Printf("CC R/W Fail; rpl=%u\r", Rpl);
-        return FAILURE;
-    }
+
     // Proceed with init
     FlushRxFIFO();
     RfConfig();

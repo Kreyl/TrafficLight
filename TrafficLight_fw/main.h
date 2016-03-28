@@ -19,7 +19,7 @@
 
 #define CMD_Q_LEN       27
 
-#define IR_TX_PERIOD_MS 250
+#define IR_TX_PERIOD_MS 50
 
 class App_t {
 private:

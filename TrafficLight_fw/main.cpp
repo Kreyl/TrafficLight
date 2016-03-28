@@ -50,11 +50,11 @@ int main(void) {
     TmrIrTx.InitAndStart(chThdGetSelfX(), MS2ST(IR_TX_PERIOD_MS), EVT_TIME_TO_IRTX, tktPeriodic);
 
     if(Rslt != OK) {
-        LedRed.StartSequence(lsqFailure);
+        LedRed.StartSequence(lsqFailureClk);
         chThdSleepMilliseconds(2700);
     }
     else if(Radio.Init() != OK) {
-        LedYellow.StartSequence(lsqFailure);
+        LedRed.StartSequence(lsqFailureCC);
         chThdSleepMilliseconds(2700);
     }
     else {
