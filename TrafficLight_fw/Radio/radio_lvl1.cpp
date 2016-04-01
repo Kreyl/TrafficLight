@@ -43,7 +43,7 @@ void rLevel1_t::ITask() {
     while(true) {
         int8_t Rssi;
         if(CC.ReceiveSync(360, &Pkt, &Rssi) == OK) {
-            Uart.Printf("\rRssi=%d; ID=%u", Rssi, Pkt.ID);
+//            Uart.Printf("\rRssi=%d; ID=%u", Rssi, Pkt.ID);
             if(Pkt.ID == App.ID) {
                 // Put what received to cmd queue and signal evt
                 Pkt.Status = App.CmdQ.Put(&Pkt.State);
