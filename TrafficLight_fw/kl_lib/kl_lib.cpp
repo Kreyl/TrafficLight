@@ -752,6 +752,10 @@ uint8_t Clk_t::SwitchToHSE() {
             while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSE); // Wait till ready
             return OK;
         }
+        else {
+            DisableHSE();
+            for(volatile uint32_t i=0; i<999; i++);
+        }
     } // for
     return FAILURE;
 }
