@@ -11,15 +11,13 @@
 #include "hal.h"
 #include "core_cmInstr.h"
 #include <cstdlib>
+#include <sys/cdefs.h>
 
 /*
 Build time:
 Define symbol BUILD_TIME in main.cpp options with value "\"${current_date}\"".
 Maybe, to calm Eclipse, it will be required to write extra quote in the end: "\"${current_date}\"""
 */
-
-// Lib version
-#define KL_LIB_VERSION      "20160308_1158"
 
 #if defined STM32L1XX
 #include "stm32l1xx.h"
@@ -31,10 +29,13 @@ Maybe, to calm Eclipse, it will be required to write extra quote in the end: "\"
 #include "stm32f4xx.h"
 #elif defined STM32F10X_LD_VL
 #include "stm32f10x.h"
+#elif defined STM32L4XX
+#include "stm32l4xx.h"
 #endif
 
 #if 1 // ============================ General ==================================
 #define __noreturn      __attribute__((noreturn))
+#define __packed        __attribute__((__packed__))
 #define __align4        __attribute__((aligned (4)))
 // Also remember __unused and __always_inline
 #ifndef countof
@@ -43,10 +44,10 @@ Maybe, to calm Eclipse, it will be required to write extra quote in the end: "\"
 
 /* ==== Function in RAM ====
  * Add to LD script, inside .data section, the following line:
- *   (.fastrun)         // "RAM-Functions"
- *   Example:
+     *(.fastrun)         // RAM-Functions
+     Example:
         . = ALIGN(4);
-        *(.fastrun)
+        *(.fastrun)     // RAM-Functions
         PROVIDE(_edata = .);
         _data_end = .;
     } > DATA_RAM AT > flash
@@ -74,16 +75,17 @@ void __early_init(void);
 #define FAILURE         1
 #define TIMEOUT         2
 #define BUSY            3
-#define NEW             4
-#define IN_PROGRESS     5
-#define LAST            6
-#define CMD_ERROR       7
-#define WRITE_PROTECT   8
-#define CMD_UNKNOWN     9
-#define EMPTY           10
+#define IN_PROGRESS     4
+#define CMD_ERROR       5
+#define CMD_UNKNOWN     6
+#define NEW             7
+#define LAST            8
+#define EMPTY           9
+#define OVERFLOW        10
 #define NOT_A_NUMBER    11
-#define OVERFLOW        12
+#define WRITE_PROTECT   12
 #define END_OF_FILE     13
+#define NOT_FOUND       14
 
 // Binary semaphores
 #define NOT_TAKEN       false
@@ -162,10 +164,34 @@ void __attribute__ ((weak)) _init(void)  {}
 }
 #endif
 
+#if 1 // ========================== Uniq ID ====================================
+#if defined STM32L1XX
+#if STM32L1XX_PROD_CAT == 1 || STM32L1XX_PROD_CAT == 2
+#define UNIQ_ID_BASE    0x1FF80050
+#else
+#define UNIQ_ID_BASE    0x1FF800D0
+#endif
+static inline uint32_t GetUniqID1() {
+    return *((uint32_t*)(UNIQ_ID_BASE + 0x00));
+}
+static inline uint32_t GetUniqID2() {
+    return *((uint32_t*)(UNIQ_ID_BASE + 0x04));
+}
+static inline uint32_t GetUniqID3() {
+    return *((uint32_t*)(UNIQ_ID_BASE + 0x14));
+}
+#endif
+#endif
+
 #if 1 // ======================= Virtual Timer =================================
 #define TIMER_KL    TRUE
-// Universal VirtualTimer callback
-void TmrKLCallback(void *p);
+/*
+ * Example:
+ * TmrKL_t TmrCheckBtn {MS2ST(54), EVT_BUTTONS, tktPeriodic};
+ * TmrCheckBtn.InitAndStart(chThdGetSelfX());
+ */
+
+void TmrKLCallback(void *p);    // Universal VirtualTimer callback
 
 enum TmrKLType_t {tktOneShot, tktPeriodic};
 
@@ -178,23 +204,27 @@ private:
     eventmask_t EvtMsk;
     TmrKLType_t TmrType;
 public:
-    // Thread, systime Period, EvtMsk, {tvtOneShot, tvtPeriodic}
-    void InitAndStart(thread_t *APThread, systime_t APeriod, eventmask_t AEvtMsk, TmrKLType_t AType) {
+    void InitAndStart(thread_t *APThread) {
         PThread = APThread;
-        Period = APeriod;
-        EvtMsk = AEvtMsk;
-        TmrType = AType;
         Start();
     }
-    // TmrReset.Init(PThread, MS2ST(RESET_INTERVAL), EVTMSK_RESET, tktOneShot);
-    void Init(thread_t *APThread, systime_t APeriod, eventmask_t AEvtMsk, TmrKLType_t AType) {
-        PThread = APThread;
-        Period = APeriod;
-        EvtMsk = AEvtMsk;
-        TmrType = AType;
+    void InitAndStart() {
+        PThread = chThdGetSelfX();
+        Start();
     }
+
+    void Init(thread_t *APThread) { PThread = APThread; }
+    void Init() { PThread = chThdGetSelfX(); }
+
     void Start() {
         chSysLock();
+        StartI();
+        chSysUnlock();
+    }
+    void Start(systime_t NewPeriod) {
+        chSysLock();
+        chVTResetI(&Tmr);
+        Period = NewPeriod;
         StartI();
         chSysUnlock();
     }
@@ -214,7 +244,11 @@ public:
         if(TmrType == tktPeriodic) StartI();
         chSysUnlockFromISR();
     }
-    TmrKL_t() : PThread(nullptr), Period(999), EvtMsk(0), TmrType(tktOneShot) {}
+    TmrKL_t(systime_t APeriod, eventmask_t AEvtMsk, TmrKLType_t AType) :
+        PThread(nullptr), Period(APeriod), EvtMsk(AEvtMsk), TmrType(AType) {}
+    // Dummy period is set
+    TmrKL_t(eventmask_t AEvtMsk, TmrKLType_t AType) :
+            PThread(nullptr), Period(S2ST(9)), EvtMsk(AEvtMsk), TmrType(AType) {}
 };
 #endif
 
@@ -222,9 +256,10 @@ public:
 static inline int Random(int LowInclusive, int HighInclusive) {
     return (rand() % (HighInclusive + 1 - LowInclusive)) + LowInclusive;
 }
+static inline void RandomSeed(unsigned int Seed) { srand(Seed); }
 #endif
 
-#if 0 // =========================== Time ======================================
+#if 1 // =========================== Time ======================================
 static inline bool TimeElapsed(systime_t *PSince, uint32_t Delay_ms) {
     chSysLock();
     bool Rslt = (chVTGetSystemTimeX() - *PSince) > MS2ST(Delay_ms);
@@ -242,22 +277,24 @@ static inline void DelayLoop(volatile uint32_t ACounter) { while(ACounter--); }
 //}
 #endif
 
-#if 0 // ======================= Power and backup unit =========================
-#define REBOOT()                SCB_AIRCR = (AIRCR_VECTKEY | 0x04)
+#if 1 // ======================= Power and backup unit =========================
+// See Programming manual: http://www.st.com/content/ccc/resource/technical/document/programming_manual/6c/3a/cb/e7/e4/ea/44/9b/DM00046982.pdf/files/DM00046982.pdf/jcr:content/translations/en.DM00046982.pdf
+// On writes, write 0x5FA to VECTKEY, otherwise the write is ignored. 4 is SYSRESETREQ: System reset request
+#define REBOOT()                SCB->AIRCR = 0x05FA0004
 
 #if defined STM32F2XX || defined STM32F4XX || defined STM32F10X_LD_VL
 namespace BackupSpc {
-static inline void EnableAccess() {
-    rccEnablePWRInterface(FALSE);
-    rccEnableBKPInterface(FALSE);
-    PWR->CR |= PWR_CR_DBP;
-}
-static inline void DisableAccess() { PWR->CR &= ~PWR_CR_DBP; }
+    static inline void EnableAccess() {
+        rccEnablePWRInterface(FALSE);
+        rccEnableBKPInterface(FALSE);
+        PWR->CR |= PWR_CR_DBP;
+    }
+    static inline void DisableAccess() { PWR->CR &= ~PWR_CR_DBP; }
 
-static inline void Reset() {
-    RCC->BDCR |=  RCC_BDCR_BDRST;
-    RCC->BDCR &= ~RCC_BDCR_BDRST;
-}
+    static inline void Reset() {
+        RCC->BDCR |=  RCC_BDCR_BDRST;
+        RCC->BDCR &= ~RCC_BDCR_BDRST;
+    }
 } // namespace
 #endif // STM32F2xx/F4xx
 #endif
@@ -332,59 +369,70 @@ class Timer_t {
 protected:
     TIM_TypeDef* ITmr;
 public:
-    // Common
     Timer_t(TIM_TypeDef *APTimer) : ITmr(APTimer) {}
-    Timer_t() : ITmr(nullptr) {}
-    void Init();
-    void Deinit();
-    void Enable()  { TMR_ENABLE(ITmr); }
-    void Disable() { TMR_DISABLE(ITmr); }
-    void SetUpdateFrequency(uint32_t FreqHz);
-    void SetTopValue(uint32_t Value) { ITmr->ARR = Value; }
-    uint32_t GetTopValue() { return ITmr->ARR; }
-    void SetupPrescaler(uint32_t PrescaledFreqHz);
-    void SetCounter(uint32_t Value) { ITmr->CNT = Value; }
-    uint32_t GetCounter() { return ITmr->CNT; }
+    void Init() const;
+    void Deinit() const;
+    void Enable() const { TMR_ENABLE(ITmr); }
+    void Disable() const { TMR_DISABLE(ITmr); }
+    void SetUpdateFrequencyChangingPrescaler(uint32_t FreqHz) const;
+    void SetUpdateFrequencyChangingTopValue(uint32_t FreqHz) const;
+    void SetTopValue(uint32_t Value) const { ITmr->ARR = Value; }
+    uint32_t GetTopValue() const { return ITmr->ARR; }
+    void EnableArrBuffering()  const { ITmr->CR1 |=  TIM_CR1_ARPE; }
+    void DisableArrBuffering() const { ITmr->CR1 &= ~TIM_CR1_ARPE; }
+    void SetupPrescaler(uint32_t PrescaledFreqHz) const;
+    void SetCounter(uint32_t Value) const { ITmr->CNT = Value; }
+    uint32_t GetCounter() const { return ITmr->CNT; }
     // Master/Slave
-    void SetTriggerInput(TmrTrigInput_t TrgInput) {
+    void SetTriggerInput(TmrTrigInput_t TrgInput) const {
         uint16_t tmp = ITmr->SMCR;
         tmp &= ~TIM_SMCR_TS;   // Clear bits
         tmp |= (uint16_t)TrgInput;
         ITmr->SMCR = tmp;
     }
-    void MasterModeSelect(TmrMasterMode_t MasterMode) {
+    void SelectMasterMode(TmrMasterMode_t MasterMode) const {
         uint16_t tmp = ITmr->CR2;
         tmp &= ~TIM_CR2_MMS;
         tmp |= (uint16_t)MasterMode;
         ITmr->CR2 = tmp;
     }
-    void SlaveModeSelect(TmrSlaveMode_t SlaveMode) {
+    void SelectSlaveMode(TmrSlaveMode_t SlaveMode) const {
         uint16_t tmp = ITmr->SMCR;
         tmp &= ~TIM_SMCR_SMS;
         tmp |= (uint16_t)SlaveMode;
         ITmr->SMCR = tmp;
     }
     // DMA, Irq, Evt
-    void EnableDmaOnTrigger() { ITmr->DIER |= TIM_DIER_TDE; }
-    void GenerateUpdateEvt()  { ITmr->EGR = TIM_EGR_UG; }
-    void EnableIrqOnUpdate()  { ITmr->DIER |= TIM_DIER_UIE; }
-    void EnableIrq(uint32_t IrqChnl, uint32_t IrqPriority) { nvicEnableVector(IrqChnl, IrqPriority); }
-    void ClearIrqPendingBit() { ITmr->SR &= ~TIM_SR_UIF;    }
-    // PWM
-    void InitPwm(GPIO_TypeDef *GPIO, uint16_t N, uint8_t Chnl, uint32_t ATopValue, Inverted_t Inverted, PinOutMode_t OutputType);
+    void EnableDmaOnTrigger() const { ITmr->DIER |= TIM_DIER_TDE; }
+    void EnableDMAOnCapture(uint8_t CaptureReq) const { ITmr->DIER |= (1 << (CaptureReq + 8)); }
+    void GenerateUpdateEvt()  const { ITmr->EGR = TIM_EGR_UG; }
+    void EnableIrqOnUpdate()  const { ITmr->DIER |= TIM_DIER_UIE; }
+    void EnableIrq(uint32_t IrqChnl, uint32_t IrqPriority) const { nvicEnableVector(IrqChnl, IrqPriority); }
+    void ClearIrqPendingBit() const { ITmr->SR &= ~TIM_SR_UIF; }
 };
 #endif
 
 #if 1 // ===================== Simple pin manipulations ========================
-struct PortPin_t {
-    GPIO_TypeDef *PGpio;
-    uint16_t Pin;
-};
-
 enum PinPullUpDown_t {
     pudNone = 0b00,
     pudPullUp = 0b01,
     pudPullDown = 0b10
+};
+
+struct PinInputSetup_t {
+    GPIO_TypeDef *PGpio;
+    uint16_t Pin;
+    PinPullUpDown_t PullUpDown;
+};
+
+struct PwmSetup_t {
+    GPIO_TypeDef *PGpio;
+    uint16_t Pin;
+    TIM_TypeDef *PTimer;
+    uint32_t TimerChnl;
+    Inverted_t Inverted;
+    PinOutMode_t OutputType;
+    uint32_t TopValue;
 };
 
 #if defined STM32F2XX || defined STM32F4XX
@@ -410,50 +458,46 @@ enum PinSpeed_t {
     psHigh = 0b11
 };
 #define PIN_SPEED_DEFAULT   psMedium
+#elif defined STM32L4XX
+enum PinSpeed_t {
+    psLow = 0b00,
+    psMedium = 0b01,
+    psHigh = 0b10,
+    psVeryHigh = 0b11
+};
+#define PIN_SPEED_DEFAULT   psMedium
 #endif
 
-enum PinAF_t {
+enum AlterFunc_t {
     AF0=0, AF1=1, AF2=2, AF3=3, AF4=4, AF5=5, AF6=6, AF7=7,
-#if defined STM32F2XX || defined STM32F4XX || defined STM32L1XX
+#if defined STM32F2XX || defined STM32F4XX || defined STM32L1XX || defined STM32L4XX
     AF8=8, AF9=9,AF10=10, AF11=11, AF12=12, AF13=13, AF14=14, AF15=15
 #endif
 };
 
 // Set/clear
 #if defined STM32L1XX || defined STM32F2XX || defined STM32F4XX || defined STM32F042x6
-#define PinSet(PGpio, APin)     PGpio->BSRRL = ((uint16_t)(1 << (APin)))
-#define PinClear(PGpio, APin)   PGpio->BSRRH = ((uint16_t)(1 << (APin)))
-#elif defined STM32F0XX || defined STM32F10X_LD_VL
 __always_inline
-static inline void PinSet(GPIO_TypeDef *PGpio, uint32_t APin) { PGpio->BSRR = 1 << APin; }
+static inline void PinSetHi(GPIO_TypeDef *PGpio, uint16_t APin) { PGpio->BSRRL = (1 << APin); }
 __always_inline
-static inline void PinSet(const PortPin_t PortPin) { PortPin.PGpio->BSRR = 1 << PortPin.Pin; }
+static inline void PinSetLo(GPIO_TypeDef *PGpio, uint16_t APin) { PGpio->BSRRH = (1 << APin); }
 
+#elif defined STM32F0XX || defined STM32F10X_LD_VL || defined STM32L4XX
 __always_inline
-static inline void PinClear (GPIO_TypeDef *PGpio, uint32_t APin) { PGpio->BRR = 1 << APin;  }
+static inline void PinSetHi(GPIO_TypeDef *PGpio, uint32_t APin) { PGpio->BSRR = 1 << APin; }
 __always_inline
-static inline void PinClear(const PortPin_t PortPin) { PortPin.PGpio->BRR = 1 << PortPin.Pin; }
+static inline void PinSetLo(GPIO_TypeDef *PGpio, uint32_t APin) { PGpio->BRR = 1 << APin;  }
 #endif
 __always_inline
 static inline void PinToggle(GPIO_TypeDef *PGpio, uint32_t APin) { PGpio->ODR ^= 1 << APin; }
-
 // Check input
 __always_inline
-static inline bool PinIsSet(GPIO_TypeDef *PGpio, uint32_t APin) {
+static inline bool PinIsHi(GPIO_TypeDef *PGpio, uint32_t APin) {
     return PGpio->IDR & (1 << APin);
 }
 __always_inline
-static inline bool PinIsSet(const PortPin_t PortPin) {
-    return PortPin.PGpio->IDR & (1 << PortPin.Pin);
-}
-
-__always_inline
-static inline bool PinIsClear(GPIO_TypeDef *PGpio, uint32_t APin) {
+static inline bool PinIsLo(GPIO_TypeDef *PGpio, uint32_t APin) {
     return !(PGpio->IDR & (1 << APin));
-}
-__always_inline
-static inline bool PinIsClear(const PortPin_t PortPin) {
-    return !(PortPin.PGpio->IDR & (1 << PortPin.Pin));
 }
 
 // Setup
@@ -469,6 +513,12 @@ static void PinClockEnable(GPIO_TypeDef *PGpioPort) {
     else if(PGpioPort == GPIOB) RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
     else if(PGpioPort == GPIOC) RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;
     else if(PGpioPort == GPIOD) RCC->APB2ENR |= RCC_APB2ENR_IOPDEN;
+#elif defined STM32L4XX
+    if     (PGpioPort == GPIOA) RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
+    else if(PGpioPort == GPIOB) RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
+    else if(PGpioPort == GPIOC) RCC->AHB2ENR |= RCC_AHB2ENR_GPIOCEN;
+    else if(PGpioPort == GPIOD) RCC->AHB2ENR |= RCC_AHB2ENR_GPIODEN;
+    else if(PGpioPort == GPIOH) RCC->AHB2ENR |= RCC_AHB2ENR_GPIOHEN;
 #else
     if     (PGpioPort == GPIOA) RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
     else if(PGpioPort == GPIOB) RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
@@ -498,7 +548,6 @@ static inline void PinSetupOut(
         GPIO_TypeDef *PGpioPort,
         const uint16_t APinNumber,
         const PinOutMode_t PinOutMode,
-        const PinPullUpDown_t APullUpDown = pudNone,
         const PinSpeed_t ASpeed = PIN_SPEED_DEFAULT
         ) {
     // Clock
@@ -525,49 +574,46 @@ static inline void PinSetupOut(
     PGpioPort->OTYPER |= (uint32_t)PinOutMode << APinNumber;
     // Setup Pull-Up or Pull-Down
     PGpioPort->PUPDR &= ~(0b11 << Offset); // clear previous bits
-    PGpioPort->PUPDR |= (uint32_t)APullUpDown << Offset;
+    PGpioPort->PUPDR |= (uint32_t)pudNone << Offset;
     // Setup speed
     PGpioPort->OSPEEDR &= ~(0b11 << Offset); // clear previous bits
     PGpioPort->OSPEEDR |= (uint32_t)ASpeed << Offset;
 #endif
 }
 
-static inline void PinSetupIn(
-        GPIO_TypeDef *PGpioPort,
-        const uint16_t APinNumber,
-        const PinPullUpDown_t APullUpDown
-        ) {
+static inline void PinSetupInput(
+        GPIO_TypeDef *PGpio,
+        const uint16_t PinN,
+        const PinPullUpDown_t PullUpDown,
+        const PinSpeed_t ASpeed = PIN_SPEED_DEFAULT) {
+    uint8_t Offset = PinN*2;
     // Clock
-    PinClockEnable(PGpioPort);
+    PinClockEnable(PGpio);
 #if defined STM32F10X_LD_VL
-    uint32_t CnfMode;
-    if(APullUpDown == pudNone) CnfMode = 0b0100;
-    else {
-        CnfMode = 0b1000;
-        if(APullUpDown == pudPullDown) PGpioPort->ODR &= ~((uint32_t)(1<<APinNumber));
-        else PGpioPort->ODR |= (uint32_t)(1<<APinNumber);
-    }
-    if(APinNumber < 8) {
-        uint8_t Offset = APinNumber*4;
-        PGpioPort->CRL &= ~((uint32_t)(0b1111 << Offset));  // Clear both mode and cnf
-        PGpioPort->CRL |= CnfMode << Offset;
-    }
-    else {
-        uint8_t Offset = (APinNumber - 8) * 4;
-        PGpioPort->CRH &= ~((uint32_t)(0b1111 << Offset));  // Clear both mode and cnf
-        PGpioPort->CRH |= CnfMode << Offset;
-    }
+        uint32_t CnfMode;
+        if(APullUpDown == pudNone) CnfMode = 0b0100;
+        else {
+            CnfMode = 0b1000;
+            if(APullUpDown == pudPullDown) PGpioPort->ODR &= ~((uint32_t)(1<<APinNumber));
+            else PGpioPort->ODR |= (uint32_t)(1<<APinNumber);
+        }
+        if(APinNumber < 8) {
+            uint8_t Offset = APinNumber*4;
+            PGpioPort->CRL &= ~((uint32_t)(0b1111 << Offset));  // Clear both mode and cnf
+            PGpioPort->CRL |= CnfMode << Offset;
+        }
+        else {
+            uint8_t Offset = (APinNumber - 8) * 4;
+            PGpioPort->CRH &= ~((uint32_t)(0b1111 << Offset));  // Clear both mode and cnf
+            PGpioPort->CRH |= CnfMode << Offset;
+        }
 #else
-    // Setup mode
-    PGpioPort->MODER &= ~(0b11 << (APinNumber*2)); // clear previous bits
-    // Setup Pull-Up or Pull-Down
-    PGpioPort->PUPDR &= ~(0b11 << (APinNumber*2)); // clear previous bits
-    PGpioPort->PUPDR |= (uint32_t)APullUpDown << (APinNumber*2);
+        // Setup mode
+        PGpio->MODER &= ~(0b11 << Offset); // clear previous bits
+        // Setup Pull-Up or Pull-Down
+        PGpio->PUPDR &= ~(0b11 << Offset); // clear previous bits
+        PGpio->PUPDR |= (uint32_t)PullUpDown << Offset;
 #endif
-}
-
-static inline void PinSetupIn(const PortPin_t PortPin, const PinPullUpDown_t APullUpDown) {
-    PinSetupIn(PortPin.PGpio, PortPin.Pin, APullUpDown);
 }
 
 static inline void PinSetupAnalog(GPIO_TypeDef *PGpioPort, const uint16_t APinNumber) {
@@ -588,16 +634,21 @@ static inline void PinSetupAnalog(GPIO_TypeDef *PGpioPort, const uint16_t APinNu
 #endif
 }
 
-static inline void PinSetupAnalog(const PortPin_t PortPin) {
-    PinSetupAnalog(PortPin.PGpio, PortPin.Pin);
+#ifdef STM32L4XX
+static inline void PinConnectAdc(GPIO_TypeDef *PGpioPort, const uint16_t APinNumber) {
+    SET_BIT(PGpioPort->ASCR, 1<<APinNumber);
 }
+static inline void PinDisconnectAdc(GPIO_TypeDef *PGpioPort, const uint16_t APinNumber) {
+    CLEAR_BIT(PGpioPort->ASCR, 1<<APinNumber);
+}
+#endif
 
 static inline void PinSetupAlterFunc(
         GPIO_TypeDef *PGpioPort,
         const uint16_t APinNumber,
         const PinOutMode_t PinOutMode,
         const PinPullUpDown_t APullUpDown,
-        const PinAF_t AAlterFunc,
+        const AlterFunc_t AAlterFunc,
         const PinSpeed_t ASpeed = PIN_SPEED_DEFAULT) {
     // Clock
     PinClockEnable(PGpioPort);
@@ -619,10 +670,10 @@ static inline void PinSetupAlterFunc(
     uint32_t Offset = APinNumber*2;
     // Setup mode
     PGpioPort->MODER &= ~(0b11 << Offset);  // clear previous bits
-    PGpioPort->MODER |= 0b10 << Offset;     // Set new bits
+    PGpioPort->MODER |= 0b10 << Offset;     // Set new bits (AF mode)
     // Setup output type
-    PGpioPort->OTYPER &= ~(1<<APinNumber);
-    PGpioPort->OTYPER |= (uint32_t)PinOutMode << APinNumber;
+    if(PinOutMode == omPushPull) PGpioPort->OTYPER &= ~(1<<APinNumber);
+    else PGpioPort->OTYPER |= 1 << APinNumber;  // Open Drain
     // Setup Pull-Up or Pull-Down
     PGpioPort->PUPDR &= ~(0b11 << Offset); // clear previous bits
     PGpioPort->PUPDR |= (uint32_t)APullUpDown << Offset;
@@ -636,7 +687,60 @@ static inline void PinSetupAlterFunc(
     PGpioPort->AFR[n] |= (uint32_t)AAlterFunc << Offset;
 #endif
 }
+
+// ==== Port setup ====
+static inline void PortInit(GPIO_TypeDef *PGpioPort,
+        const PinOutMode_t PinOutMode,
+        const PinPullUpDown_t APullUpDown = pudNone,
+        const PinSpeed_t ASpeed = PIN_SPEED_DEFAULT
+        ) {
+    // Clock
+    PinClockEnable(PGpioPort);
+    // Setup output type
+    if(PinOutMode == omPushPull) PGpioPort->OTYPER = 0;
+    else PGpioPort->OTYPER = 0xFFFF;
+    // Setup Pull-Up or Pull-Down
+    if(APullUpDown == pudPullUp) PGpioPort->PUPDR = 0x55555555; // 01 01 01 01...
+    else if(APullUpDown == pudPullDown) PGpioPort->PUPDR = 0xAAAAAAAA; // 10 10 10 10...
+    else PGpioPort->PUPDR = 0x00000000; // no pull
+    // Setup speed
+    switch(ASpeed) {
+#if defined STM32L1XX
+        case psVeryLow:  PGpioPort->OSPEEDR = 0x00000000; break;
+        case psLow:      PGpioPort->OSPEEDR = 0x55555555; break;
+        case psMedium:   PGpioPort->OSPEEDR = 0xAAAAAAAA; break;
+        case psHigh:     PGpioPort->OSPEEDR = 0xFFFFFFFF; break;
+#elif defined STM32L4XX
+        case psVeryHigh: PGpioPort->OSPEEDR = 0xFFFFFFFF; break;
+        case psLow:      PGpioPort->OSPEEDR = 0x00000000; break;
+        case psMedium:   PGpioPort->OSPEEDR = 0x55555555; break;
+        case psHigh:     PGpioPort->OSPEEDR = 0xAAAAAAAA; break;
+#elif defined STM32F0XX
+        case psLow:      PGpioPort->OSPEEDR = 0x00000000; break;
+        case psMedium:   PGpioPort->OSPEEDR = 0x55555555; break;
+        case psHigh:     PGpioPort->OSPEEDR = 0xFFFFFFFF; break;
 #endif
+    }
+}
+
+__always_inline
+static inline void PortSetupOutput(GPIO_TypeDef *PGpioPort) {
+    PGpioPort->MODER = 0x55555555;
+}
+__always_inline
+static inline void PortSetupInput(GPIO_TypeDef *PGpioPort) {
+    PGpioPort->MODER = 0x00000000;
+}
+
+__always_inline
+static inline void PortSetValue(GPIO_TypeDef *PGpioPort, uint16_t Data) {
+    PGpioPort->ODR = Data;
+}
+__always_inline
+static inline uint16_t PortGetValue(GPIO_TypeDef *PGpioPort) {
+    return PGpioPort->IDR;
+}
+#endif // Simple pin manipulations
 
 #if defined STM32F10X_LD_VL // Disable JTAG, leaving SWD
 static inline void JtagDisable() {
@@ -651,58 +755,56 @@ static inline void JtagDisable() {
 #endif
 
 #if 1 // ===================== Pin classes ========================
-// ==== On/Off output pin ====
-// Example: const PinOutput_t Magnet = {GPIOA, 10, omPushPull};
 class PinOutput_t {
-public:
-    GPIO_TypeDef *PGpio;
-    uint16_t Pin;
-    void Init(PinOutMode_t OutMode) const { PinSetupOut(PGpio, Pin, OutMode); }
-    void Set(uint8_t AValue) const { if(AValue != 0) PinSet(PGpio, Pin); else PinClear(PGpio, Pin); }
-    void Hi() const { PinSet(PGpio, Pin); }
-    void Lo() const { PinClear(PGpio, Pin); }
-    void Toggle() const { PinToggle(PGpio, Pin); }
-    PinOutput_t(GPIO_TypeDef *APGpio, uint16_t APin) :
-        PGpio(APGpio), Pin(APin) {}
-};
-
-// ==== Digital Input Pin ====
-// Example: const PinInput_t EchoPin = {GPIOC, 12, pudPullUp};
-class PinInput_t {
-public:
-    GPIO_TypeDef *PGpio;
-    uint16_t Pin;
-    PinPullUpDown_t PullUpDown;
-    void Init() const { PinSetupIn(PGpio, Pin, PullUpDown); }
-    bool IsHi() const { return PinIsSet(PGpio, Pin); }
-};
-
-// ==== PWM output ====
-// Example: PinOutputPWM_t<LED_TOP_VALUE, LED_INVERTED_PWM, omPushPull> IChnl({GPIOB, 15, TIM11, 1});
-template <uint32_t TopValue, Inverted_t Inverted, PinOutMode_t OutputType>
-class PinOutputPWM_t : private Timer_t {
 private:
     GPIO_TypeDef *PGpio;
     uint16_t Pin;
-    uint32_t TmrChnl;
+    PinOutMode_t OutputType;
 public:
-    void Set(const uint8_t AValue) { *TMR_PCCR(ITmr, TmrChnl) = AValue; }    // CCR[N] = AValue
-    void Init() {
-        Timer_t::Init();
-        InitPwm(PGpio, Pin, TmrChnl, TopValue, Inverted, OutputType);
-        Enable();
+    void Init() const { PinSetupOut(PGpio, Pin, OutputType); }
+    void Deinit() const { PinSetupAnalog(PGpio, Pin); }
+    void SetHi() const { PinSetHi(PGpio, Pin); }
+    void SetLo() const { PinSetLo(PGpio, Pin); }
+    void Set(uint8_t Value) {
+        if(Value == 0) SetLo();
+        else SetHi();
     }
-    void Deinit() { Timer_t::Deinit(); PinSetupAnalog(PGpio, Pin); }
-    void SetFrequencyHz(uint32_t FreqHz) { Timer_t::SetUpdateFrequency(FreqHz); }
-    PinOutputPWM_t(GPIO_TypeDef *APGpio, uint16_t APin, TIM_TypeDef *APTimer, uint32_t ATmrChnl) :
-        PGpio(APGpio), Pin(APin), TmrChnl(ATmrChnl) { ITmr = APTimer; }
+    PinOutput_t(GPIO_TypeDef *APGPIO, uint16_t APin, PinOutMode_t AOutputType) :
+        PGpio(APGPIO), Pin(APin), OutputType(AOutputType) {}
+};
+
+class PinInput_t {
+private:
+    const PinInputSetup_t ISetup;
+public:
+    void Init() const { PinSetupInput(ISetup.PGpio, ISetup.Pin, ISetup.PullUpDown); }
+    void Deinit() const { PinSetupAnalog(ISetup.PGpio, ISetup.Pin); }
+    bool IsHi() const { return PinIsHi(ISetup.PGpio, ISetup.Pin); }
+    PinInput_t(const PinInputSetup_t &ASetup) : ISetup(ASetup) {}
+};
+
+
+// ==== PWM output ====
+/* Example:
+ * #define LED_R_PIN { GPIOB, 1, TIM3, 4, invInverted, omPushPull, 255 }
+ * PinOutputPWM_t Led {LedPin};
+*/
+class PinOutputPWM_t : private Timer_t {
+private:
+    const PwmSetup_t ISetup;
+public:
+    void Set(const uint16_t AValue) const { *TMR_PCCR(ITmr, ISetup.TimerChnl) = AValue; }    // CCR[N] = AValue
+    void Init() const;
+    void Deinit() const { Timer_t::Deinit(); PinSetupAnalog(ISetup.PGpio, ISetup.Pin); }
+    void SetFrequencyHz(uint32_t FreqHz) const { Timer_t::SetUpdateFrequencyChangingPrescaler(FreqHz); }
+    PinOutputPWM_t(const PwmSetup_t &ASetup) : Timer_t(ASetup.PTimer), ISetup(ASetup) {}
 };
 #endif
 
 #if 1 // ==== External IRQ ====
 enum ExtiTrigType_t {ttRising, ttFalling, ttRisingFalling};
 
-#if defined STM32L1XX || defined STM32F4XX
+#if defined STM32L1XX || defined STM32F4XX || defined STM32L4XX
 #define PIN2IRQ_CHNL(Pin)   \
     (((Pin) > 9)? EXTI15_10_IRQn : (((Pin) > 4)? EXTI9_5_IRQn : ((Pin) + EXTI0_IRQn)))
 #elif defined STM32F030 || defined STM32F0
@@ -710,17 +812,35 @@ enum ExtiTrigType_t {ttRising, ttFalling, ttRisingFalling};
     (((Pin) > 3)? EXTI4_15_IRQn : (((Pin) > 1)? EXTI2_3_IRQn : EXTI0_1_IRQn))
 #endif
 
-// Example:
-// const PinIrq_t GPinDrdy {ACC_DRDY_PIN};
-// GPinDrdy.Init(ACC_DRDY_GPIO, pudNone, ttRising);
+/* Example:
+ const PinIrq_t GPinDrdy {ACC_DRDY_PIN};
+ GPinDrdy.Init(ACC_DRDY_GPIO, pudNone, ttRising);
+*/
 class PinIrq_t {
 public:
-    uint8_t Pin;
-    PinIrq_t(uint16_t APin) { Pin = APin; }
+    GPIO_TypeDef *PGpio;
+    uint16_t PinN;
+    PinPullUpDown_t PullUpDown;
+    PinIrq_t(GPIO_TypeDef *APGpio, uint16_t APinN, PinPullUpDown_t APullUpDown) :
+        PGpio(APGpio), PinN(APinN), PullUpDown(APullUpDown) {}
 
     void SetTriggerType(ExtiTrigType_t ATriggerType) const {
-        uint32_t IrqMsk = 1 << Pin;
+        uint32_t IrqMsk = 1 << PinN;
         switch(ATriggerType) {
+#if defined STM32L4XX
+            case ttRising:
+                EXTI->RTSR1 |=  IrqMsk;  // Rising trigger enabled
+                EXTI->FTSR1 &= ~IrqMsk;  // Falling trigger disabled
+                break;
+            case ttFalling:
+                EXTI->RTSR1 &= ~IrqMsk;  // Rising trigger disabled
+                EXTI->FTSR1 |=  IrqMsk;  // Falling trigger enabled
+                break;
+            case ttRisingFalling:
+                EXTI->RTSR1 |=  IrqMsk;  // Rising trigger enabled
+                EXTI->FTSR1 |=  IrqMsk;  // Falling trigger enabled
+                break;
+#else
             case ttRising:
                 EXTI->RTSR |=  IrqMsk;  // Rising trigger enabled
                 EXTI->FTSR &= ~IrqMsk;  // Falling trigger disabled
@@ -733,32 +853,46 @@ public:
                 EXTI->RTSR |=  IrqMsk;  // Rising trigger enabled
                 EXTI->FTSR |=  IrqMsk;  // Falling trigger enabled
                 break;
+#endif
         } // switch
     }
 
-    void Init(GPIO_TypeDef *PGPIO, PinPullUpDown_t APullUpDown, ExtiTrigType_t ATriggerType) const {
+    void Init(ExtiTrigType_t ATriggerType) const {
         // Init pin as input
-        PinSetupIn(PGPIO, Pin, APullUpDown);
+        PinSetupInput(PGpio, PinN, PullUpDown);
         rccEnableAPB2(RCC_APB2ENR_SYSCFGEN, FALSE); // Enable sys cfg controller
         // Connect EXTI line to the pin of the port
-        uint8_t Indx   = Pin / 4;            // Indx of EXTICR register
-        uint8_t Offset = (Pin & 0x03) * 4;   // Offset in EXTICR register
+        uint8_t Indx   = PinN / 4;               // Indx of EXTICR register
+        uint8_t Offset = (PinN & 0x03) * 4;      // Offset in EXTICR register
         SYSCFG->EXTICR[Indx] &= ~((uint32_t)0b1111 << Offset);  // Clear port-related bits
         // GPIOA requires all zeroes => nothing to do in this case
-        if     (PGPIO == GPIOB) SYSCFG->EXTICR[Indx] |= (uint32_t)0b0001 << Offset;
-        else if(PGPIO == GPIOC) SYSCFG->EXTICR[Indx] |= (uint32_t)0b0010 << Offset;
+        if     (PGpio == GPIOB) SYSCFG->EXTICR[Indx] |= (uint32_t)0b0001 << Offset;
+        else if(PGpio == GPIOC) SYSCFG->EXTICR[Indx] |= (uint32_t)0b0010 << Offset;
         // Configure EXTI line
-        uint32_t IrqMsk = 1 << Pin;
+        uint32_t IrqMsk = 1 << PinN;
+#if defined STM32L4XX
+        EXTI->IMR1  |=  IrqMsk;      // Interrupt mode enabled
+        EXTI->EMR1  &= ~IrqMsk;      // Event mode disabled
+        SetTriggerType(ATriggerType);
+        EXTI->PR1    =  IrqMsk;      // Clean irq flag
+#else
         EXTI->IMR  |=  IrqMsk;      // Interrupt mode enabled
         EXTI->EMR  &= ~IrqMsk;      // Event mode disabled
         SetTriggerType(ATriggerType);
         EXTI->PR    =  IrqMsk;      // Clean irq flag
+#endif
     }
-    void EnableIrq(const uint32_t Priority) const { nvicEnableVector(PIN2IRQ_CHNL(Pin), Priority); }
-    void DisableIrq() const { nvicDisableVector(PIN2IRQ_CHNL(Pin)); }
-    void CleanIrqFlag() const { EXTI->PR = (1 << Pin); }
-    bool IsIrqPending() const { return BitIsSet(EXTI->PR, (1 << Pin)); }
-    void GenerateIrq()  const { EXTI->SWIER = (1 << Pin); }
+    void EnableIrq(const uint32_t Priority) const { nvicEnableVector(PIN2IRQ_CHNL(PinN), Priority); }
+    void DisableIrq() const { nvicDisableVector(PIN2IRQ_CHNL(PinN)); }
+#if defined STM32L4XX
+    void CleanIrqFlag() const { EXTI->PR1 = (1 << PinN); }
+    bool IsIrqPending() const { return BitIsSet(EXTI->PR1, (1 << PinN)); }
+    void GenerateIrq()  const { EXTI->SWIER1 = (1 << PinN); }
+#else
+    void CleanIrqFlag() const { EXTI->PR = (1 << PinN); }
+    bool IsIrqPending() const { return BitIsSet(EXTI->PR, (1 << PinN)); }
+    void GenerateIrq()  const { EXTI->SWIER = (1 << PinN); }
+#endif
 };
 #endif // EXTI
 
@@ -816,21 +950,35 @@ public:
 #if 1 // ============================== Sleep ==================================
 namespace Sleep {
 static inline void EnterStandby() {
-#if defined STM32F0XX
+#if defined STM32F0XX || defined STM32L4XX
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
 #else
     SCB->SCR |= SCB_SCR_SLEEPDEEP;
 #endif
+
+#if defined STM32L4XX
+    uint32_t tmp = PWR->CR1 & ~PWR_CR1_LPMS;
+    tmp |= PWR_CR1_LPMS_SHUTDOWN;
+    PWR->CR1 = tmp;
+#else
     PWR->CR = PWR_CR_PDDS;
     PWR->CR |= PWR_CR_CWUF;
+#endif
     __WFI();
 }
 
+#if defined STM32L4XX
+static inline void EnableWakeup1Pin()  { PWR->CR3 |=  PWR_CR3_EWUP1; }
+static inline void DisableWakeup1Pin() { PWR->CR3 &= ~PWR_CR3_EWUP1; }
+static inline void EnableWakeup2Pin()  { PWR->CR3 |=  PWR_CR3_EWUP2; }
+static inline void DisableWakeup2Pin() { PWR->CR3 &= ~PWR_CR3_EWUP2; }
+#else
 static inline void EnableWakeup1Pin()  { PWR->CSR |=  PWR_CSR_EWUP1; }
 static inline void DisableWakeup1Pin() { PWR->CSR &= ~PWR_CSR_EWUP1; }
 
 static inline bool WasInStandby() { return (PWR->CSR & PWR_CSR_SBF); }
 static inline void ClearStandbyFlag() { PWR->CR |= PWR_CR_CSBF; }
+#endif
 
 }; // namespace
 #endif
@@ -853,13 +1001,17 @@ class Spi_t {
 private:
     SPI_TypeDef *PSpi;
 public:
-    void Setup(SPI_TypeDef *Spi, BitOrder_t BitOrder,
-            CPOL_t CPOL, CPHA_t CPHA, SpiBaudrate_t Baudrate, BitNumber_t BitNumber = bitn8) {
-        PSpi = Spi;
+    Spi_t(SPI_TypeDef *ASpi) : PSpi(ASpi) {}
+    // Example: boMSB, cpolIdleLow, cphaFirstEdge, sbFdiv2, bitn8
+    void Setup(BitOrder_t BitOrder, CPOL_t CPOL, CPHA_t CPHA,
+            SpiBaudrate_t Baudrate, BitNumber_t BitNumber = bitn8) const {
         // Clocking
         if      (PSpi == SPI1) { rccEnableSPI1(FALSE); }
-#ifdef RCC_APB1ENR_SPI2EN
+#ifdef SPI2
         else if (PSpi == SPI2) { rccEnableSPI2(FALSE); }
+#endif
+#ifdef SPI3
+        else if (PSpi == SPI3) { rccEnableSPI3(FALSE); }
 #endif
         // Mode: Master, NSS software controlled and is 1, 8bit, NoCRC, FullDuplex
         PSpi->CR1 = SPI_CR1_SSM | SPI_CR1_SSI | SPI_CR1_MSTR;
@@ -876,36 +1028,67 @@ public:
         if(BitNumber == bitn16) PSpi->CR2 = (uint16_t)0b1111 << 8;
         else PSpi->CR2 = ((uint16_t)0b0111 << 8) | SPI_CR2_FRXTH; // 8 bit
         PSpi->I2SCFGR &= ~((uint16_t)SPI_I2SCFGR_I2SMOD);       // Disable I2S
+#elif defined STM32L4XX
+        // Generate RXNE when FIFO level is greater or equal to 1/4 (8 bit)
+        if(BitNumber == bitn8) PSpi->CR2 |= 0x0700; // 8bit
+        else if(BitNumber == bitn16) PSpi->CR2 |= 0x0F00;
+        PSpi->CR2 |= SPI_CR2_FRXTH;
+
 #endif
     }
-    void Enable () { PSpi->CR1 |=  SPI_CR1_SPE; }
-    void Disable() { PSpi->CR1 &= ~SPI_CR1_SPE; }
-    void EnableTxDma()  { PSpi->CR2 |=  SPI_CR2_TXDMAEN; }
-    void DisableTxDma() { PSpi->CR2 &= ~SPI_CR2_TXDMAEN; }
-    void EnableRxDma()  { PSpi->CR2 |=  SPI_CR2_RXDMAEN; }
-    void DisableRxDma() { PSpi->CR2 &= ~SPI_CR2_RXDMAEN; }
-    void SetRxOnly()    { PSpi->CR1 |=  SPI_CR1_RXONLY; }
-    void SetFullDuplex(){ PSpi->CR1 &= ~SPI_CR1_RXONLY; }
+    void Enable ()       const { PSpi->CR1 |=  SPI_CR1_SPE; }
+    void Disable()       const { PSpi->CR1 &= ~SPI_CR1_SPE; }
+    void EnableTxDma()   const { PSpi->CR2 |=  SPI_CR2_TXDMAEN; }
+    void DisableTxDma()  const { PSpi->CR2 &= ~SPI_CR2_TXDMAEN; }
+    void EnableRxDma()   const { PSpi->CR2 |=  SPI_CR2_RXDMAEN; }
+    void DisableRxDma()  const { PSpi->CR2 &= ~SPI_CR2_RXDMAEN; }
+    void SetRxOnly()     const { PSpi->CR1 |=  SPI_CR1_RXONLY; }
+    void SetFullDuplex() const { PSpi->CR1 &= ~SPI_CR1_RXONLY; }
 #if defined STM32F072xB
-    void WaitFTLVLZero(){ while(PSpi->SR & SPI_SR_FTLVL); }
+    void WaitFTLVLZero() const { while(PSpi->SR & SPI_SR_FTLVL); }
 #endif
-    void WaitBsyHi2Lo() { while(PSpi->SR & SPI_SR_BSY); }
-    void ClearRxBuf()   { while(PSpi->SR & SPI_SR_RXNE) (void)PSpi->DR; }
-    uint8_t ReadWriteByte(uint8_t AByte) {
+    void WaitBsyHi2Lo()  const { while(PSpi->SR & SPI_SR_BSY); }
+    void ClearRxBuf()    const { while(PSpi->SR & SPI_SR_RXNE) (void)PSpi->DR; }
+    uint8_t ReadWriteByte(uint8_t AByte) const {
         *((volatile uint8_t*)&PSpi->DR) = AByte;
         while(!(PSpi->SR & SPI_SR_RXNE));  // Wait for SPI transmission to complete
         return *((volatile uint8_t*)&PSpi->DR);
     }
-    uint16_t ReadWriteWord(uint16_t Word) {
+    uint16_t ReadWriteWord(uint16_t Word) const {
         PSpi->DR = Word;
         while(!(PSpi->SR & SPI_SR_RXNE));
         return PSpi->DR;
     }
+#if defined STM32L4XX
+    void WriteRead3Bytes(uint8_t *ptr) const {
+        *((volatile uint8_t*)&PSpi->DR) = ptr[0];
+        *((volatile uint8_t*)&PSpi->DR) = ptr[1];
+        *((volatile uint8_t*)&PSpi->DR) = ptr[2];
+        while(!(PSpi->SR & SPI_SR_RXNE));
+        ptr[0] = *((volatile uint8_t*)&PSpi->DR);
+        while(!(PSpi->SR & SPI_SR_RXNE));
+        ptr[1] = *((volatile uint8_t*)&PSpi->DR);
+        while(!(PSpi->SR & SPI_SR_RXNE));
+        ptr[2] = *((volatile uint8_t*)&PSpi->DR);
+    }
+#endif
 };
 #endif
 
-#if I2C_REQUIRED // ========================= I2C ==============================
-#define I2C_ASYNC       TRUE
+#if I2C1_ENABLED && !defined STM32L4XX // ========================= I2C ==============================
+struct i2cParams_t {
+    I2C_TypeDef *pi2c;
+    GPIO_TypeDef *PGpio;
+    uint16_t SclPin;
+    uint16_t SdaPin;
+    AlterFunc_t PinAF;
+    uint32_t BitrateHz;
+    // DMA
+    const stm32_dma_stream_t *PDmaTx;
+    const stm32_dma_stream_t *PDmaRx;
+};
+
+
 /* Example:
  * i2c_t i2c (I2C_ACC, ACC_I2C_GPIO, ACC_I2C_SCL_PIN, ACC_I2C_SDA_PIN,
  * 400000, I2C_ACC_DMA_TX, I2C_ACC_DMA_RX );
@@ -929,27 +1112,19 @@ public:
 
 class i2c_t {
 private:
-#ifdef STM32F2XX
-    uint16_t DmaChnl;
-#else
-#define DmaChnl     0   // dummy
-#endif
-    I2C_TypeDef *ii2c;
-    GPIO_TypeDef *IPGpio;
-    uint16_t ISclPin, ISdaPin;
-    uint32_t IBitrateHz;
-    void SendStart()     { ii2c->CR1 |= I2C_CR1_START; }
-    void SendStop()      { ii2c->CR1 |= I2C_CR1_STOP; }
-    void AckEnable()     { ii2c->CR1 |= I2C_CR1_ACK; }
-    void AckDisable()    { ii2c->CR1 &= ~I2C_CR1_ACK; }
-    bool RxIsNotEmpty()  { return (ii2c->SR1 & I2C_SR1_RXNE); }
-    void ClearAddrFlag() { (void)ii2c->SR1; (void)ii2c->SR2; }
-    void SignalLastDmaTransfer() { ii2c->CR2 |= I2C_CR2_LAST; }
+    const i2cParams_t *PParams;
+    void SendStart()     { PParams->pi2c->CR1 |= I2C_CR1_START; }
+    void SendStop()      { PParams->pi2c->CR1 |= I2C_CR1_STOP; }
+    void AckEnable()     { PParams->pi2c->CR1 |= I2C_CR1_ACK; }
+    void AckDisable()    { PParams->pi2c->CR1 &= ~I2C_CR1_ACK; }
+    bool RxIsNotEmpty()  { return (PParams->pi2c->SR1 & I2C_SR1_RXNE); }
+    void ClearAddrFlag() { (void)PParams->pi2c->SR1; (void)PParams->pi2c->SR2; }
+    void SignalLastDmaTransfer() { PParams->pi2c->CR2 |= I2C_CR2_LAST; }
     // Address and data
-    void SendAddrWithWrite(uint8_t Addr) { ii2c->DR = (uint8_t)(Addr<<1); }
-    void SendAddrWithRead (uint8_t Addr) { ii2c->DR = ((uint8_t)(Addr<<1)) | 0x01; }
-    void SendData(uint8_t b) { ii2c->DR = b; }
-    uint8_t ReceiveData() { return ii2c->DR; }
+    void SendAddrWithWrite(uint8_t Addr) { PParams->pi2c->DR = (uint8_t)(Addr<<1); }
+    void SendAddrWithRead (uint8_t Addr) { PParams->pi2c->DR = ((uint8_t)(Addr<<1)) | 0x01; }
+    void SendData(uint8_t b) { PParams->pi2c->DR = b; }
+    uint8_t ReceiveData() { return PParams->pi2c->DR; }
     // Flags operations
     uint8_t IBusyWait();
     uint8_t WaitEv5();
@@ -959,29 +1134,28 @@ private:
     uint8_t WaitRx();
     uint8_t WaitStop();
     uint8_t WaitBTF();
+    binary_semaphore_t BSemaphore;
 public:
     bool Error;
     thread_reference_t ThdRef;
-    const stm32_dma_stream_t *PDmaTx, *PDmaRx;
     void Init();
     void Standby();
     void Resume();
     void Reset();
-    void BusScan();
+    void ScanBus();
     uint8_t WriteRead(uint8_t Addr, uint8_t *WPtr, uint8_t WLength, uint8_t *RPtr, uint8_t RLength);
     uint8_t WriteWrite(uint8_t Addr, uint8_t *WPtr1, uint8_t WLength1, uint8_t *WPtr2, uint8_t WLength2);
     uint8_t Write(uint8_t Addr, uint8_t *WPtr1, uint8_t WLength1);
-    i2c_t(I2C_TypeDef *pi2c,
-            GPIO_TypeDef *PGpio, uint16_t SclPin, uint16_t SdaPin,
-            uint32_t BitrateHz,
-            const stm32_dma_stream_t *APDmaTx, const stm32_dma_stream_t *APDmaRx) :
-                ii2c(pi2c), IPGpio(PGpio), ISclPin(SclPin), ISdaPin(SdaPin), IBitrateHz(BitrateHz),
-                Error(false), ThdRef(nullptr),
-                PDmaTx(APDmaTx), PDmaRx(APDmaRx) {}
+    i2c_t(const i2cParams_t *APParams) : PParams(APParams),
+                Error(false), ThdRef(nullptr) {}
 };
-#endif
 
-#if 0 // ====================== FLASH & EEPROM =================================
+#if I2C1_ENABLED
+extern i2c_t i2c1;
+#endif
+#endif // i2c common
+
+#if 1 // ====================== FLASH & EEPROM =================================
 #define FLASH_LIB_KL
 #define EEPROM_BASE_ADDR    ((uint32_t)0x08080000)
 // ==== Flash keys ====
@@ -1101,8 +1275,6 @@ public:
     uint32_t AHBFreqHz;     // HCLK: AHB Bus, Core, Memory, DMA; 32 MHz max
     uint32_t APB1FreqHz;    // PCLK1: APB1 Bus clock; 32 MHz max
     uint32_t APB2FreqHz;    // PCLK2: APB2 Bus clock; 32 MHz max
-    uint8_t Timer2_7ClkMulti = 1;
-    uint8_t Timer9_11ClkMulti = 1;
     // SysClk switching
     uint8_t SwitchToHSI();
     uint8_t SwitchToHSE();
@@ -1145,8 +1317,6 @@ public:
 
     void PrintFreqs();
 };
-
-extern Clk_t Clk;
 
 // ==== V Core ====
 enum VCore_t {vcore1V2=0b11, vcore1V5=0b10, vcore1V8=0b01};
@@ -1191,8 +1361,13 @@ enum PllMul_t {
     pllMul16=14
 };
 
+#ifdef STM32F030
+enum PllSrc_t {plsHSIdiv2=0b00, plsHSIdivPREDIV=0b01, plsHSEdivPREDIV=0b10};
+enum ClkSrc_t {csHSI=0b00, csHSE=0b01, csPLL=0b10};
+#else
 enum PllSrc_t {plsHSIdiv2=0b00, plsHSIdivPREDIV=0b01, plsHSEdivPREDIV=0b10, plsHSI48divPREDIV=0b11};
 enum ClkSrc_t {csHSI=0b00, csHSE=0b01, csPLL=0b10, csHSI48=0b11};
+#endif
 
 enum AHBDiv_t {
     ahbDiv1=0b0000,
@@ -1214,7 +1389,9 @@ private:
     uint8_t EnablePLL();
     // To Hsi48 and back again
     uint32_t ISavedAhbDividers;
+#ifdef RCC_CFGR_SW_HSI48
     bool IHsi48WasOn;
+#endif
 public:
     // Frequency values
     uint32_t AHBFreqHz;     // HCLK: AHB Bus, Core, Memory, DMA; 48 MHz max
@@ -1235,13 +1412,19 @@ public:
     void DisableHSE()   { RCC->CR  &= ~RCC_CR_HSEON; }
     void DisableHSI()   { RCC->CR  &= ~RCC_CR_HSION; }
     void DisablePLL()   { RCC->CR  &= ~RCC_CR_PLLON; }
+#ifdef RCC_CR2_HSI48ON
     void DisableHSI48() { RCC->CR2 &= ~RCC_CR2_HSI48ON; }
+#endif
     void DisableCRS();
     // Checks
+#ifdef RCC_CR2_HSI48ON
     bool IsHSI48On() { return (RCC->CR2 & RCC_CR2_HSI48ON); }
+#endif
     uint32_t GetAhbApbDividers() { return RCC->CFGR & (RCC_CFGR_HPRE | RCC_CFGR_PPRE); }
     // Setups
+#ifdef RCC_CFGR3_USBSW
     void SelectUSBClock_HSI48() { RCC->CFGR3 &= ~RCC_CFGR3_USBSW; }
+#endif
     void SetupBusDividers(AHBDiv_t AHBDiv, APBDiv_t APBDiv);
     void SetupBusDividers(uint32_t Dividers);
     uint8_t SetupPLLDividers(uint8_t HsePreDiv, PllMul_t PllMul);
@@ -1252,8 +1435,6 @@ public:
 
     void PrintFreqs();
 };
-
-extern Clk_t Clk;
 
 #elif defined STM32F4xx_MCUCONF
 #include "stm32f4xx.h"
@@ -1342,8 +1523,6 @@ public:
     void MCO2Disable();
 };
 
-extern Clk_t Clk;
-
 /*
  * Early initialization code.
  * This initialization must be performed just after stack setup and before
@@ -1352,6 +1531,80 @@ extern Clk_t Clk;
 extern "C" {
 void __early_init(void);
 }
+
+#elif defined STM32L4XX
+// Values of the Internal oscillator in Hz
+#define MSI_FREQ_HZ     4000000UL
+#define HSI_FREQ_HZ     16000000UL
+// Top frequency in all domains is 80 MHz
+
+enum AHBDiv_t {
+    ahbDiv1=0b0000,
+    ahbDiv2=0b1000,
+    ahbDiv4=0b1001,
+    ahbDiv8=0b1010,
+    ahbDiv16=0b1011,
+    ahbDiv64=0b1100,
+    ahbDiv128=0b1101,
+    ahbDiv256=0b1110,
+    ahbDiv512=0b1111
+};
+
+enum APBDiv_t {apbDiv1=0b000, apbDiv2=0b100, apbDiv4=0b101, apbDiv8=0b110, apbDiv16=0b111};
+enum MCUVoltRange_t {mvrHiPerf, mvrLoPerf};
+enum Src48MHz_t { src48None = 0b00, src48PllSai1Q = 0b01, src48PllQ = 0b10, src48Msi = 0b11 };
+enum PllSrc_t { pllsrcNone = 0b00, pllsrcMsi = 0b01, pllsrcHsi16 = 0b10, pllsrcHse = 0b11 };
+
+class Clk_t {
+private:
+    uint8_t EnableHSE();
+    uint8_t EnablePLL();
+    bool HiPerfModeEnabled = false;
+public:
+    // Frequency values
+    uint32_t AHBFreqHz;     // HCLK: AHB Buses, Core, Memory, DMA
+    uint32_t APB1FreqHz;    // PCLK1: APB1 Bus clock
+    uint32_t APB2FreqHz;    // PCLK2: APB2 Bus clock
+    // SysClk switching
+    uint8_t SwitchToHSI();
+    uint8_t SwitchToHSE();
+    uint8_t SwitchToPLL();
+    uint8_t SwitchToMSI();
+    void DisableHSE() { RCC->CR &= ~RCC_CR_HSEON; }
+    uint8_t EnableHSI();
+    void DisableHSI() { RCC->CR &= ~RCC_CR_HSION; }
+    void DisablePLL() { RCC->CR &= ~RCC_CR_PLLON; }
+    void DisableMSI() { RCC->CR &= ~RCC_CR_MSION; }
+
+    void SetupBusDividers(AHBDiv_t AHBDiv, APBDiv_t APB1Div, APBDiv_t APB2Div);
+    // PLL and PLLSAI
+    void SetupPllSrc(PllSrc_t Src) { MODIFY_REG(RCC->PLLCFGR, RCC_PLLCFGR_PLLSRC, ((uint32_t)Src)); }
+    uint8_t SetupPllMulDiv(uint32_t M, uint32_t N, uint32_t R, uint32_t Q, uint32_t P = 8);
+    uint8_t SetupPllSai1(uint32_t N, uint32_t R);
+    void EnableSai1ROut() { SET_BIT(RCC->PLLSAI1CFGR, RCC_PLLSAI1CFGR_PLLSAI1REN); }
+
+    void UpdateFreqValues();
+    void EnablePrefeth() { FLASH->ACR |= FLASH_ACR_PRFTEN; }
+    void SetupFlashLatency(uint8_t AHBClk_MHz, MCUVoltRange_t VoltRange);
+    void SetVoltageRange(MCUVoltRange_t VoltRange);
+    void Select48MhzSrc(Src48MHz_t Src);
+    // LSI
+    void EnableLSI() {
+        RCC->CSR |= RCC_CSR_LSION;
+        while(!(RCC->CSR & RCC_CSR_LSIRDY));
+    }
+    void DisableLSI() { RCC->CSR &= RCC_CSR_LSION; }
+
+    void SetHiPerfMode();
+    void SetLoPerfMode();
+
+    // Setup independent clock
+//    void SetUart
+
+    void PrintFreqs();
+};
 #endif
 
-#endif
+extern Clk_t Clk;
+
+#endif // Clocking

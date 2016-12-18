@@ -16,10 +16,14 @@
 #include "rlvl1_defins.h"
 
 #define APP_NAME                "TrafficLight"
+// ==== Constants and default values ====
+#define ID_MIN                  1
+#define ID_MAX                  36
+#define ID_DEFAULT              ID_MIN
 
-#define CMD_Q_LEN       27
+#define CMD_Q_LEN               27
 
-#define IR_TX_PERIOD_MS 50
+#define IR_TX_PERIOD_MS         50
 
 class App_t {
 private:
@@ -27,7 +31,6 @@ private:
     State_t State;
 public:
     uint8_t ID;
-    uint8_t GetDipSwitch();
     CircBuf_t<State_t, CMD_Q_LEN> CmdQ;
     // Eternal methods
     void InitThread() { PThread = chThdGetSelfX(); }

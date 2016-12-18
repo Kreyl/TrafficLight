@@ -30,8 +30,8 @@ void ir_t::Init() {
     dmaStreamSetTransactionSize(DAC_DMA, CARRIER_PERIOD_CNT);
     // ==== Sampling timer ====
     SamplingTmr.Init();
-    SamplingTmr.SetUpdateFrequency(SAMPLING_FREQ_HZ);
-    SamplingTmr.MasterModeSelect(mmUpdate);
+    SamplingTmr.SetUpdateFrequencyChangingTopValue(SAMPLING_FREQ_HZ);
+    SamplingTmr.SelectMasterMode(mmUpdate);
     SamplingTmr.Enable();
 
     // ==== Chunk timer ====
