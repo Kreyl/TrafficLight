@@ -60,7 +60,7 @@ int main(void) {
     LedLeft.Init();
     LedRight.Init();
 
-//    ir.Init();
+    ir.Init();
     TmrIrTx.StartOrRestart();
 
     if(Rslt != retvOk) {
@@ -107,13 +107,13 @@ void ITask() {
                 break;
 
         case evtIdTimeToTxIR:
-//            if(State.IRPwr != 0) {
-//                uint16_t Data = State.IRData;
-//                Data <<= 8;
-//                uint16_t Pwr = State.IRPwr;
-//                Pwr = Pwr * 10 + 1000;
-//                ir.TransmitWord(Data, Pwr);
-//            }
+            if(State.IRPwr != 0) {
+                uint16_t Data = State.IRData;
+                Data <<= 8;
+                uint16_t Pwr = State.IRPwr;
+                Pwr = Pwr * 10 + 1000;
+                ir.TransmitWord(Data, Pwr);
+            }
             break;
         } // switch
     } // while true

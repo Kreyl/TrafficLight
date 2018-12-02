@@ -47,16 +47,15 @@ void rLevel1_t::ITask() {
         CC.Recalibrate();
         if(CC.Receive(360, &Pkt, RPKT_LEN, &Rssi) == retvOk) {
             Printf("Rssi=%d; ID=%u\r", Rssi, Pkt.ID);
-//            if(Pkt.ID == ID) {
-//                // Put what received to cmd queue and signal evt
-//                memcpy(&State, &Pkt.State, sizeof(State));
-//                EvtQMain.SendNowOrExit(EvtMsg_t(evtIdRadioCmd));
-//                // Transmit reply
-//                Pkt.Status = 0;
-//                CC.Transmit(&Pkt, RPKT_LEN);
-//            }
+            if(Pkt.ID == ID) {
+                // Put what received to cmd queue and signal evt
+                memcpy(&State, &Pkt.State, sizeof(State));
+                EvtQMain.SendNowOrExit(EvtMsg_t(evtIdRadioCmd));
+                // Transmit reply
+                Pkt.Status = 0;
+                CC.Transmit(&Pkt, RPKT_LEN);
+            }
         }
-//                chThdSleepMilliseconds(7);
     } // while
 }
 #endif // task
