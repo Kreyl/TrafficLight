@@ -1,23 +1,20 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Project xsi:noNamespaceSchemaLocation="Project.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-	<Version current="1"/>
-	<Format>Project</Format>
-	<Header>
-		<Program name="TopoR" version="6.2"/>
-		<GUID>{A79D8C87-03C9-4181-B1E0-C3EA3F2A065F}</GUID>
-		<Annotation>Project file</Annotation>
-	</Header>
-	<Document>
-		<LocalLibrary />
-		<Pcb>
-			<File path=".\TrafficLight.fsx" isopened="0"/>
-		</Pcb>
-		<Import>
-			<Specctra>
-			<Path name="D:\Nute\PresentTime\TrafficLight\TrafficLight_hw\TrafficLight.dsn"/>
-			</Specctra>
-		</Import>
-		<ARouteSessions>
-		</ARouteSessions>
-	</Document>
+<?xml version="1.0" encoding="UTF-8"?>
+<!--******************************************-->
+<!--   File    : TrafficLight.fsproj          -->
+<!--   Format  : TopoR Project file           -->
+<!--   Version : 2                            -->
+<!--   Program : TopoR Lite 7.0.18578         -->
+<!--   Date    : Wednesday, November 28, 2018 -->
+<!--   Time    : 16:38                        -->
+<!--******************************************-->
+
+<Project>
+   <Version current="2"/>
+   <GUID>{4F54A13F-2465-42DE-A7C2-487BFE858193}</GUID>
+   <Documents>
+      <Section name="PCB" isExpanded="true">
+         <File path=".\TrafficLight.fsx" isopened="1" dateChange="2018-11-17 12:50:06"/>
+      </Section>
+      <Section name="AutoRouting" isExpanded="false"/>
+   </Documents>
 </Project>

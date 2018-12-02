@@ -1,0 +1,49 @@
+# Terminal macro file v2
+Ping
+Ping#010#013
+Red
+set 28 100,0,0,0,0 100 0x77#010#013
+Yellow
+set 28 0,100,0,0,0 45 0x77#010#013
+GreenAll
+set 28 0,0,100,100,100 45 0x77#010#013
+Paused
+set 40 100,0,0,0,0 100 0x77#010#013
+Operat
+SetState 2#010#013
+Reload
+SetState 3#010#013
+Dmgd
+SetState 4#010#013
+Destr
+SetState 5#010#013
+
+SetState 4#010#013
+
+cst 5 1#010#013
+sst 1 2
+SetState 1 2#010#013
+Tx
+Tx#010#013
+Stop
+Stop#010#013
+
+SetSettings 2 2 0 100 1 5 5 10#010#013
+
+cst 4 0#010#013
+Turret
+Settype 2#010#013
+Target
+Settype 1#010#013
+
+
+
+Start#010#013
+
+Stop#010#013
+
+
+PillCure
+PillWrite32,102#010#013
+PillPan
+PillWrite32,103#010#013
