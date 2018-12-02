@@ -5,8 +5,7 @@
  * Created on 7 Март 2010 г., 12:42
  */
 
-#ifndef _CC_RF_SETTINGS_H
-#define	_CC_RF_SETTINGS_H
+#pragma once
 
 // All this is for 27.0 MHz crystal, and for 868 MHz carrier
 
@@ -41,8 +40,8 @@
 
 // =================================== Common ==================================
 // ==== MDMCFG1 ==== 7 FEC_EN, 6:4 NUM_PREAMBLE, 3:2 not used, 1:0 CHANSPC_E
-//#define CC_FEC_EN           0x80    // Fec enabled
-#define CC_FEC_EN           0x00    // Fec disabled
+#define CC_FEC_EN           0x80    // Fec enabled
+//#define CC_FEC_EN           0x00    // Fec disabled
 #define CC_NUM_PREAMBLE     0x20    // 010 => 4 bytes of preamble
 #define CC_MDMCFG1_VALUE    (CC_FEC_EN | CC_NUM_PREAMBLE | CC_CHANSPC_E)
 
@@ -66,9 +65,10 @@
 
 //#define CC_PKTCTRL1_VALUE   0b00001110  // PQT=0, CRC autoflush=1, Append=1, Address check = 10 (check, 0 is broadcast)
 #define CC_PKTCTRL1_VALUE   0b00001100  // PQT=0, CRC autoflush=1, Append=1, Address check = 00 (no check)
-#define CC_PKTCTRL0_VALUE   0b01000100  // WhiteData=1, PKTFormat=normal, CRC enabled, Fixed Length
-//#define CC_PKTCTRL0_VALUE   0b00000100  // WhiteData=0, PKTFormat=normal, CRC enabled, Fixed Length
-//#define CC_PKTCTRL0_VALUE   0b00000000  // WhiteData=0, PKTFormat=normal, CRC disabled, Fixed Length
+#define CC_PKTCTRL0_VALUE   0b01000100  // WhiteData=1, PKTFrmt=norm, CRC en, Fixed Length
+//#define CC_PKTCTRL0_VALUE   0b00000100  // WhiteData=0, PKTFrmt=norm, CRC en, Fixed Length
+//#define CC_PKTCTRL0_VALUE   0b01000101  // WhiteData=1, PKTFrmt=norm, CRC en, Variable Length
+//#define CC_PKTCTRL0_VALUE   0b00000000  // WhiteData=0, PKTFrmt=norm, CRC dis, Fixed Length
 #define CC_ADDR_VALUE       0x01        // Device address.
 
 // ========================= Bitrate-specific ==================================
@@ -219,7 +219,3 @@
 #define CC_SYNC0_VALUE      0x91
 
 #define CC_CHANNR_VALUE     0x00        // Channel number.
-
-
-#endif	/* _CC_RF_SETTINGS_H */
-

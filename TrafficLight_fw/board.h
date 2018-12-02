@@ -10,7 +10,8 @@
 #include <inttypes.h>
 
 // ==== General ====
-#define BOARD_NAME          "TrafficLight v20160229"
+#define BOARD_NAME          "TrafficLight"
+#define APP_NAME            "TrafficLight"
 // MCU type as defined in the ST header.
 #define STM32L151xB
 
@@ -26,36 +27,20 @@
 #define UART_GPIO       GPIOA
 #define UART_TX_PIN     9
 #define UART_RX_PIN     10
-#define UART_AF         AF7 // for USART1 @ GPIOA
-
-// Dip Switch
-#define DIPSW_PIN1      { GPIOA, 15 }
-#define DIPSW_PIN2      { GPIOC, 13 }
-#define DIPSW_PIN3      { GPIOC, 14 }
-#define DIPSW_PIN4      { GPIOA, 12 }
-#define DIPSW_PIN5      { GPIOA, 11 }
-#define DIPSW_PIN6      { GPIOA, 8 }
 
 // LEDs GPIO and timer
-#define LED_RED         { GPIOB, 9, TIM4, 4 }
-#define LED_YELLOW      { GPIOB, 8, TIM4, 3 }
-#define LED_STRAIGHT    { GPIOB, 5, TIM3, 2 }
-#define LED_LEFT        { GPIOB, 7, TIM4, 2 }
-#define LED_RIGHT       { GPIOB, 6, TIM4, 1 }
+#define LED_RED         { GPIOB, 9, TIM4, 4, invNotInverted, omPushPull, 255 }
+#define LED_YELLOW      { GPIOB, 8, TIM4, 3, invNotInverted, omPushPull, 255 }
+#define LED_STRAIGHT    { GPIOB, 5, TIM3, 2, invNotInverted, omPushPull, 255 }
+#define LED_LEFT        { GPIOB, 7, TIM4, 2, invNotInverted, omPushPull, 255 }
+#define LED_RIGHT       { GPIOB, 6, TIM4, 1, invNotInverted, omPushPull, 255 }
 
 // IR LED
 #define LED_IR          GPIOA, 4
 
-// Radio
-#define CC_GPIO         GPIOA
-#define CC_GDO2         2
-#define CC_GDO0         3
-#define CC_SCK          5
-#define CC_MISO         6
-#define CC_MOSI         7
-#define CC_CS           1
-// Input pin (do not touch)
-#define CC_GDO0_IRQ     { CC_GPIO, CC_GDO0, pudNone }
+// Radio: SPI, PGpio, Sck, Miso, Mosi, Cs, Gdo0
+#define CC_Setup0       SPI1, GPIOA, 5,6,7, 1, 3
+
 #endif // GPIO
 
 #if 1 // ========================= Timer =======================================
@@ -68,17 +53,6 @@
 
 #if I2C_REQUIRED // ====================== I2C =================================
 #define I2C_ACC         I2C2
-#endif
-
-#if 1 // =========================== SPI =======================================
-#define CC_SPI          SPI1
-#define CC_SPI_AF       AF5
-#endif
-
-#if 1 // ========================== USART ======================================
-#define UART            USART1
-#define UART_TX_REG     UART->DR
-#define UART_RX_REG     UART->DR
 #endif
 
 #if ADC_REQUIRED // ======================= Inner ADC ==========================
@@ -104,10 +78,11 @@
 #if 1 // =========================== DMA =======================================
 #define STM32_DMA_REQUIRED  TRUE
 // ==== Uart ====
-// Remap is made automatically if required
+#define UART_DMA_TX_MODE(Chnl) (STM32_DMA_CR_CHSEL(Chnl) | DMA_PRIORITY_LOW | STM32_DMA_CR_MSIZE_BYTE | STM32_DMA_CR_PSIZE_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_DIR_M2P | STM32_DMA_CR_TCIE)
+#define UART_DMA_RX_MODE(Chnl) (STM32_DMA_CR_CHSEL(Chnl) | DMA_PRIORITY_MEDIUM | STM32_DMA_CR_MSIZE_BYTE | STM32_DMA_CR_PSIZE_BYTE | STM32_DMA_CR_MINC | STM32_DMA_CR_DIR_P2M | STM32_DMA_CR_CIRC)
 #define UART_DMA_TX     STM32_DMA1_STREAM4
 #define UART_DMA_RX     STM32_DMA1_STREAM5
-#define UART_DMA_CHNL   0   // Dummy
+#define UART_DMA_CHNL   2
 
 // DAC
 #define DAC_DMA         STM32_DMA1_STREAM2
@@ -132,3 +107,15 @@
 #endif // ADC
 
 #endif // DMA
+
+#if 1 // ========================== USART ======================================
+#define PRINTF_FLOAT_EN FALSE
+#define UART_TXBUF_SZ   1024
+#define UART_RXBUF_SZ   99
+
+#define UARTS_CNT       1
+
+#define CMD_UART_PARAMS \
+    USART1, UART_GPIO, UART_TX_PIN, UART_GPIO, UART_RX_PIN, \
+    UART_DMA_TX, UART_DMA_RX, UART_DMA_TX_MODE(UART_DMA_CHNL), UART_DMA_RX_MODE(UART_DMA_CHNL)
+#endif

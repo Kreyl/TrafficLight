@@ -73,7 +73,7 @@ void ir_t::TransmitWord(uint16_t wData, uint16_t DACValue) {
 }
 
 void ir_t::IChunkTmrHandler() {
-    ChunkTmr.ClearIrqPendingBit();
+    ChunkTmr.ClearUpdateIrqPendingBit();
 //    Uart.PrintfI("Tmr Irq\r");
     uint32_t LenSent = PChunk - TxBuf;
     // Check if last chunk
