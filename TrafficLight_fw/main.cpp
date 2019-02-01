@@ -17,7 +17,7 @@ static void OnCmd(Shell_t *PShell);
 #define EE_ADDR_DEVICE_ID       0
 #define IR_TX_PERIOD_MS         50
 #define ID_MIN                  1
-#define ID_MAX                  15
+#define ID_MAX                  254
 #define ID_DEFAULT              ID_MIN
 
 ir_t ir;
@@ -130,8 +130,10 @@ void OnCmd(Shell_t *PShell) {
     else if(PCmd->NameIs("GetID")) PShell->Reply("ID", ID);
 
     else if(PCmd->NameIs("SetID")) {
-        if(PCmd->GetNext<int32_t>(&ID) != retvOk) { PShell->Ack(retvCmdError); return; }
-        uint8_t r = ISetID(ID);
+        int32_t NewID;
+        if(PCmd->GetNext<int32_t>(&NewID) != retvOk) { PShell->Ack(retvCmdError); return; }
+        if(NewID < ID_MIN or NewID > ID_MAX) { PShell->Ack(retvBadValue); return; }
+        uint8_t r = ISetID(NewID);
         PShell->Ack(r);
     }
 
@@ -149,7 +151,6 @@ void ReadIDfromEE() {
 }
 
 uint8_t ISetID(int32_t NewID) {
-    if(NewID < ID_MIN or NewID > ID_MAX) return retvFail;
     uint8_t rslt = EE::Write32(EE_ADDR_DEVICE_ID, NewID);
     if(rslt == retvOk) {
         ID = NewID;
